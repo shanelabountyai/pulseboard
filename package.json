@@ -34,7 +34,8 @@
     "rollups:run": "dotenv -e .env.local -- tsx scripts/rollups.ts run",
     "rollups:verify": "dotenv -e .env.local -- tsx scripts/rollups.ts verify",
     "bench:rollups": "dotenv -e .env.local -- tsx scripts/bench-rollups.ts",
-    "bench:queries": "dotenv -e .env.local -- tsx scripts/bench-queries.ts"
+    "bench:queries": "dotenv -e .env.local -- tsx scripts/bench-queries.ts",
+    "seed:generate": "dotenv -e .env.local -- tsx scripts/seed-generate.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

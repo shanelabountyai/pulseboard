@@ -10,7 +10,9 @@ import { retention } from '@/lib/retention';
 // over all 13 weeks, median of 3 each. Uniform names make every user re-enter the funnel many times, so the funnel
 // number is a worst case, not the seed's shaped dropoff (Phase 4's seed:generate). Deletes the org after.
 const n = Number(process.argv[2] ?? 1_000_000);
-const org = await db.org.create({ data: { slug: `bench-${Date.now()}`, name: 'bench' } });
+// BENCH_ORG=demo times the seeded org (seed:generate) instead: no ingest, no delete.
+const seeded = process.env.BENCH_ORG;
+const org = seeded ? await db.org.findUniqueOrThrow({ where: { slug: seeded } }) : await db.org.create({ data: { slug: `bench-${Date.now()}`, name: 'bench' } });
 const names = ['signup', 'view', 'click', 'purchase', 'invite', 'search', 'share', 'logout'];
 const DAY = 86_400_000;
 const end = now().getTime();
@@ -23,20 +25,20 @@ const median = async (f: () => Promise<unknown>) => {
 
 try {
   const t0 = performance.now();
-  for (let i = 0; i < n; i += MAX_BATCH) {
+  for (let i = 0; !seeded && i < n; i += MAX_BATCH) {
     await ingest(org.id, Array.from({ length: Math.min(MAX_BATCH, n - i) }, () => ({
       event_name: names[rand(names.length)], user_id: `u${rand(20_000)}`,
       timestamp: new Date(end - rand(90 * DAY)).toISOString(),
     })));
   }
   const ingestMs = performance.now() - t0;
-  await runRollupsForOrg(org.id);
+  if (!seeded) await runRollupsForOrg(org.id);
   await db.$executeRaw`ANALYZE "Event"`;
   await db.$executeRaw`ANALYZE "RollupUserDay"`;
   const f = await median(() => funnel(org.id, { steps: ['signup', 'view', 'purchase'], from: new Date(end - 30 * DAY), to: new Date(end), windowMs: 7 * DAY }));
   const r = await median(() => retention(org.id, { from: new Date(end - 91 * DAY), to: new Date(end) }));
-  console.log(`${n} events: ingest ${(n / ingestMs * 1000).toFixed(0)} ev/s, funnel(3 steps, 30 days, 7d window) ${f}ms, retention(13 weeks) ${r}ms`);
+  console.log(`${seeded ? `seed ${seeded}` : `${n} events`}: ${seeded ? '' : `ingest ${(n / ingestMs * 1000).toFixed(0)} ev/s, `}funnel(3 steps, 30 days, 7d window) ${f}ms, retention(13 weeks) ${r}ms`);
 } finally {
-  await db.org.delete({ where: { id: org.id } });
+  if (!seeded) await db.org.delete({ where: { id: org.id } });
   await db.$disconnect();
 }
