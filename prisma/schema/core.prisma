@@ -85,6 +85,9 @@ model Org {
   // module back-relations: each line ends in its module marker (spec §4)
   billingAccount BillingAccount? // billing
   outbox         Outbox[] // notifications
+  writeKeys      WriteKey[] // app
+  events         Event[] // app
+  deadLetters    DeadLetterEvent[] // app
 }
 
 model Membership {

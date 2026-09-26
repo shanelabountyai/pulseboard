@@ -1,4 +1,6 @@
-# SaaS Foundation
+# pulseboard
+
+> Cloned from saas-foundation v1.0.1. Port 4500. Upgrade with `npm run foundation:status`; template-owned paths are listed in the template's plan §3.2.
 
 A Next.js 16 + Prisma 7 + Postgres template with the parts every multi-tenant app rebuilds: magic-link sign-in with TOTP,
 orgs and roles, one authorization path, an append-only audit log, share links, cron, and optional billing (Stripe) and
