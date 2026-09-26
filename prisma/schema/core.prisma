@@ -88,6 +88,10 @@ model Org {
   writeKeys      WriteKey[] // app
   events         Event[] // app
   deadLetters    DeadLetterEvent[] // app
+  rollupDaily    RollupDaily[] // app
+  rollupProps    RollupDailyProp[] // app
+  propRegistry   RegisteredProperty[] // app
+  rollupMark     RollupWatermark? // app
 }
 
 model Membership {

@@ -30,7 +30,10 @@
     "foundation:drift": "tsx scripts/foundation-drift.ts",
     "foundation:status": "tsx scripts/foundation-status.ts",
     "foundation:check-modules": "tsx scripts/foundation-check-modules.ts",
-    "key:create": "dotenv -e .env.local -- tsx scripts/write-key.ts"
+    "key:create": "dotenv -e .env.local -- tsx scripts/write-key.ts",
+    "rollups:run": "dotenv -e .env.local -- tsx scripts/rollups.ts run",
+    "rollups:verify": "dotenv -e .env.local -- tsx scripts/rollups.ts verify",
+    "bench:rollups": "dotenv -e .env.local -- tsx scripts/bench-rollups.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

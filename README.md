@@ -43,6 +43,22 @@ and go in `.env.local`; without them email is captured in the database, billing 
 | `npm run foundation:drift` | in a clone: fails if a template-owned file was edited |
 | `npm run foundation:status` | in a clone: current vs latest release, and any `security:` changelog entries between |
 | `npm run foundation:check-modules` | builds a scratch copy with both modules deleted (CI runs it) |
+| `npm run key:create -- <orgSlug>` | mints a `/ingest` write key and prints it once |
+| `npm run rollups:run` | rebuilds the UTC days dirtied since each org's watermark (also runs on the `/api/cron` tick) |
+| `npm run rollups:verify` | rollup count/uniques vs. raw events per (org, day, event); exits 1 on drift |
+| `npm run bench:rollups [-- N]` | ingests N events (default 100k) into a throwaway org, times ingest + one rollup run, verifies, deletes it |
+
+## Performance
+
+Every number here names its command and hardware. Apple M4 (Mac16,13), 24 GB, Postgres 17.11 (Homebrew), local, 2026-09-26,
+no other database load. Medians of 3.
+
+| What | Command | Result |
+|---|---|---|
+| Rollup of 100k new events spread over 31 days (daily counts, uniques, 2 registered props) | `npm run bench:rollups` | **~0.83s** (800–863ms warm; 1.44s on the first, cold run); `rollups:verify` clean |
+| Write cost of the `(orgId, ts)` + `(orgId, receivedAt)` Event indexes | `npm run bench:rollups` vs `BENCH_NO_INDEXES=1 npm run bench:rollups` | not measurable at 100k: ~72k vs ~70k ev/s, inside run-to-run noise (±5%). Re-measure at 1M rows in Phase 4 |
+
+The ingest rate above calls `ingest()` in process: it prices the SQL, not HTTP. P0-1's ≥1,000 events/sec over `/ingest` is measured by `load:run` (Phase 4).
 
 ## Layout
 

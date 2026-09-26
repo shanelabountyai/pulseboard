@@ -24,6 +24,8 @@ model Event {
   properties Json     @default("{}")
 
   @@unique([orgId, eventId])
+  @@index([orgId, ts]) // rollup day recompute (and funnels, Phase 3)
+  @@index([orgId, receivedAt]) // rollup dirty-day scan (D-008)
 }
 
 model DeadLetterEvent {
@@ -35,4 +37,47 @@ model DeadLetterEvent {
   receivedAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([orgId, receivedAt])
+}
+
+// Rollups (src/lib/rollups.ts). Days are UTC. Rebuilt per dirty day by DELETE + INSERT … SELECT, so a re-run is exact.
+model RollupDaily {
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  eventName String
+  count     Int
+  uniques   Int
+
+  @@id([orgId, day, eventName])
+}
+
+model RollupDailyProp {
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  eventName String
+  prop      String
+  value     String // properties->>prop, truncated to 200 chars so the key fits a btree entry
+  count     Int
+
+  @@id([orgId, day, eventName, prop, value])
+}
+
+// Which property values get rolled up. eventName null = every event.
+model RegisteredProperty {
+  id        String  @id @default(uuid()) @db.Uuid
+  orgId     String  @db.Uuid
+  org       Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  eventName String?
+  prop      String
+
+  @@unique([orgId, eventName, prop])
+}
+
+// Max Event.receivedAt the last rollup run saw, per org. Its row lock also serializes concurrent runs.
+model RollupWatermark {
+  orgId      String   @id @db.Uuid
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  receivedAt DateTime @db.Timestamptz(6)
+  ranAt      DateTime @db.Timestamptz(6)
 }

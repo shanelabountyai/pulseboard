@@ -1,20 +1,18 @@
 # NEXT
 
-**Phase 1 done 2026-09-26:** clone bootstrap + `POST /ingest` (write key, per-row dead-letter, `event_id` dedupe,
-future-timestamp clamp, 365-day floor). 8 integration tests; HTTP smoke-tested on :4500. Decisions D-001…D-008 in `docs/decisions.md`.
+**Phase 2 done 2026-09-26:** rollups + verify (PRD P0-2). `RollupDaily`, `RollupDailyProp`, `RegisteredProperty`,
+`RollupWatermark`; `rollups:run` / `rollups:verify` / `bench:rollups`; wired into `/api/cron`. 5 integration tests
+(hand-computed fixture, late event, re-run + replay no-op, clock-skew overlap, verify drift/pending). D-009…D-014.
+Measured: 100k events → rollup ~0.83s on an M4 (README → Performance).
 
-## Next item: Phase 2 — rollups + verify (PRD P0-2). Model: Opus (idempotency is correctness-critical).
+## Next item: Phase 3 — funnels + retention (PRD P0-3/P0-4). Model: Opus (TDD engines, correctness-critical).
 
-1. Tables: `RollupDaily(orgId, day, eventName, count, uniques)` and `RollupDailyProp(orgId, day, eventName, prop, value, count)`,
-   plus `RegisteredProperty(orgId, eventName?, prop)` and `RollupWatermark(orgId, receivedAt)`.
-2. `rollups:run`: dirty days = `SELECT DISTINCT date(ts) … WHERE receivedAt > watermark` (D-008). Recompute each dirty
-   day with DELETE + INSERT … SELECT in one transaction; advance the watermark to the max `receivedAt` seen. Add an index on
-   `("orgId", "receivedAt")` and measure its write cost.
-   Watch for: a row committed with an older `receivedAt` after the watermark read (clock skew between concurrent ingests).
-   Consider a small overlap (re-scan watermark − 1 min); recompute is idempotent, so overlap is safe.
-3. Wire it into `src/app/cron-jobs.ts` too (Vercel cron is hourly; the PRD target is fresh within 5 minutes — note the gap).
-4. `rollups:verify`: rollup sums vs. raw counts per (org, day, event) → a test that fails on drift.
-5. Tests first: a late event dirties its old day; re-running is a no-op; a replayed batch changes nothing.
-6. Measure: rollup runtime for 100k new events (command + hardware in README).
+1. Hand-computed fixtures FIRST (CLAUDE.md rule 6): funnel steps with ordering, conversion window, repeated steps,
+   a user who does step 2 before step 1; retention cohorts across a UTC day boundary.
+2. Funnels read raw `Event` (the documented exemption); the `(orgId, ts)` index exists — consider `(orgId, userId, ts)` with a measurement.
+3. Retention reads rollups — decide which rollup answers it (per-user activity per day is NOT in RollupDaily; a
+   `RollupUserDay(orgId, day, userId)` table may be needed — record the decision).
+4. Only then optimize; "interactive time on a 1M-event seed" needs `seed:generate` (Phase 4) — note or pull forward.
 
-Deferred on purpose: `load:run` and `seed:generate` are Phase 4 per the PRD, so P0-1's ≥1,000 events/sec criterion is still open.
+Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
+index write cost re-measure at 1M rows (D-011); P0-1's ≥1,000 events/sec over HTTP (`load:run`, Phase 4).
