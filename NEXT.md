@@ -11,12 +11,13 @@ Measured at 1M events (`npm run bench:queries`): funnel 256–496ms, retention 4
 rebuilds the org each run, ~4 min, ANALYZEs at the end: without it retention ran >10 min on stale stats). `BENCH_ORG=demo npm run bench:queries`
 times the seed: funnel 211–236ms, retention 428–500ms (README row added). Demo org has registered props `plan`, `platform`.
 
-## Next item: Phase 4b — dashboard (PRD P0-5). Model: Sonnet (UI wiring).
+**Phase 4b done 2026-09-26:** dashboard at `/o/[org]` (`src/app/o/[org]/page.tsx`, reads in `src/lib/dashboard.ts`). Trend (inline SVG,
+RollupDaily / RollupDailyProp), signup → view → purchase funnel (7d window), retention triangle with "no new users" rows filled (D-018),
+GET-form date range + event + property filter, "data as of" = `RollupWatermark.ranAt` on every chart. Filter values come from `RollupDailyProp`.
+`tests/integration/dashboard.test.ts` covers trend/gap-fill/filter/org isolation. **Not yet eyeballed in a browser** (sign in as a demo-org member
+after `seed:generate`; check chart shapes, and that the default 90d range is fast).
 
-1. Dashboard: trends (RollupDaily, property filter from RollupDailyProp values), one saved funnel (signup → view → purchase),
-   retention triangle, date-range picker, "data as of" = `RollupWatermark.ranAt` on every chart.
-   Retention omits weeks with no new users (D-018), so the UI fills them or says so.
-2. Then Phase 4c: `load:run`, >=1,000 events/sec over HTTP `/ingest` (P0-1). Model: Opus.
+## Next item: Phase 4c: `load:run`, >=1,000 events/sec over HTTP `/ingest` (P0-1). Model: Opus.
 
 Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
 index write cost at 1M rows (D-011, now three query indexes: A/B it in `load:run`, `bench:queries` ingest rate is too noisy — 55–63k ev/s);
