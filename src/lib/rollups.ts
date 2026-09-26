@@ -40,6 +40,7 @@ export async function runRollupsForOrg(orgId: string): Promise<RollupResult> {
     if (days.length) {
       await tx.$executeRaw`DELETE FROM "RollupDaily" WHERE "orgId" = ${orgId}::uuid AND "day" = ANY(${days}::date[])`;
       await tx.$executeRaw`DELETE FROM "RollupDailyProp" WHERE "orgId" = ${orgId}::uuid AND "day" = ANY(${days}::date[])`;
+      await tx.$executeRaw`DELETE FROM "RollupUserDay" WHERE "orgId" = ${orgId}::uuid AND "day" = ANY(${days}::date[])`;
       // LATERAL per day: one (orgId, ts) index range each, so cost follows the dirty days' rows, however far apart they are.
       await tx.$executeRaw`
         INSERT INTO "RollupDaily" ("orgId", "day", "eventName", "count", "uniques")
@@ -50,6 +51,15 @@ export async function runRollupsForOrg(orgId: string): Promise<RollupResult> {
           WHERE "orgId" = ${orgId}::uuid AND "ts" >= d::timestamp AT TIME ZONE 'UTC' AND "ts" < (d + 1)::timestamp AT TIME ZONE 'UTC'
         ) e
         GROUP BY d, e."eventName"`;
+      // Retention's source (D-015): who was active, per day and event.
+      await tx.$executeRaw`
+        INSERT INTO "RollupUserDay" ("orgId", "day", "eventName", "userId")
+        SELECT DISTINCT ${orgId}::uuid, d, e."eventName", e."userId"
+        FROM unnest(${days}::date[]) AS d
+        CROSS JOIN LATERAL (
+          SELECT "eventName", "userId" FROM "Event"
+          WHERE "orgId" = ${orgId}::uuid AND "ts" >= d::timestamp AT TIME ZONE 'UTC' AND "ts" < (d + 1)::timestamp AT TIME ZONE 'UTC'
+        ) e`;
       // (event, prop) pairs from the rows just written; DISTINCT so a prop registered both globally and for
       // this event counts once. A hash join on a handful of pairs, not a lookup per event.
       await tx.$executeRaw`
@@ -77,14 +87,18 @@ export async function runRollupsForOrg(orgId: string): Promise<RollupResult> {
   }, { timeout: 10 * 60_000, maxWait: 60_000 });
 }
 
-export type Drift = { orgId: string; day: string; eventName: string; raw: [number, number]; rollup: [number, number] };
+export type Drift = {
+  orgId: string; day: string; eventName: string;
+  raw: [number, number]; rollup: [number, number];
+  userDays: number; // RollupUserDay rows, which must equal raw uniques
+};
 
 /**
- * Rollup (count, uniques) vs. the same aggregate over raw events, per (org, day, event). Days holding an event
- * the last run has not seen yet are skipped: they are pending, not drifted. Returns [] when clean.
+ * Rollup (count, uniques) and RollupUserDay rows vs. the same aggregates over raw events, per (org, day, event).
+ * Days holding an event the last run has not seen yet are skipped: they are pending, not drifted. Returns [] when clean.
  */
 export async function verifyRollups(): Promise<Drift[]> {
-  const rows = await db.$queryRaw<{ orgId: string; day: string; eventName: string; rc: number; ru: number; oc: number; ou: number }[]>`
+  const rows = await db.$queryRaw<{ orgId: string; day: string; eventName: string; rc: number; ru: number; oc: number; ou: number; ud: number }[]>`
     WITH raw AS (
       SELECT e."orgId", (e."ts" AT TIME ZONE 'UTC')::date AS day, e."eventName",
              count(*)::int AS c, count(DISTINCT e."userId")::int AS u, max(e."receivedAt") AS latest
@@ -93,13 +107,20 @@ export async function verifyRollups(): Promise<Drift[]> {
       SELECT raw."orgId", raw.day FROM raw
       LEFT JOIN "RollupWatermark" w ON w."orgId" = raw."orgId"
       WHERE w."receivedAt" IS NULL OR raw.latest > w."receivedAt"
+    ), rolled AS (
+      SELECT coalesce(r."orgId", ud."orgId") AS "orgId", coalesce(r."day", ud."day") AS day,
+             coalesce(r."eventName", ud."eventName") AS "eventName", r."count", r."uniques", ud.n
+      FROM "RollupDaily" r
+      FULL JOIN (SELECT "orgId", "day", "eventName", count(*)::int AS n FROM "RollupUserDay" GROUP BY 1, 2, 3) ud
+        ON ud."orgId" = r."orgId" AND ud."day" = r."day" AND ud."eventName" = r."eventName"
     )
-    SELECT coalesce(raw."orgId", r."orgId")::text AS "orgId", to_char(coalesce(raw.day, r."day"), 'YYYY-MM-DD') AS day,
+    SELECT coalesce(raw."orgId", r."orgId")::text AS "orgId", to_char(coalesce(raw.day, r.day), 'YYYY-MM-DD') AS day,
            coalesce(raw."eventName", r."eventName") AS "eventName",
-           coalesce(raw.c, 0) AS rc, coalesce(raw.u, 0) AS ru, coalesce(r."count", 0) AS oc, coalesce(r."uniques", 0) AS ou
-    FROM raw FULL JOIN "RollupDaily" r ON r."orgId" = raw."orgId" AND r."day" = raw.day AND r."eventName" = raw."eventName"
-    WHERE (raw.c IS DISTINCT FROM r."count" OR raw.u IS DISTINCT FROM r."uniques")
-      AND NOT EXISTS (SELECT 1 FROM pending p WHERE p."orgId" = coalesce(raw."orgId", r."orgId") AND p.day = coalesce(raw.day, r."day"))
+           coalesce(raw.c, 0) AS rc, coalesce(raw.u, 0) AS ru, coalesce(r."count", 0) AS oc, coalesce(r."uniques", 0) AS ou,
+           coalesce(r.n, 0) AS ud
+    FROM raw FULL JOIN rolled r ON r."orgId" = raw."orgId" AND r.day = raw.day AND r."eventName" = raw."eventName"
+    WHERE (raw.c IS DISTINCT FROM r."count" OR raw.u IS DISTINCT FROM r."uniques" OR raw.u IS DISTINCT FROM r.n)
+      AND NOT EXISTS (SELECT 1 FROM pending p WHERE p."orgId" = coalesce(raw."orgId", r."orgId") AND p.day = coalesce(raw.day, r.day))
     ORDER BY 1, 2, 3`;
-  return rows.map((r) => ({ orgId: r.orgId, day: r.day, eventName: r.eventName, raw: [r.rc, r.ru], rollup: [r.oc, r.ou] }));
+  return rows.map((r) => ({ orgId: r.orgId, day: r.day, eventName: r.eventName, raw: [r.rc, r.ru], rollup: [r.oc, r.ou], userDays: r.ud }));
 }

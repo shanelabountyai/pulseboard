@@ -26,6 +26,7 @@ model Event {
   @@unique([orgId, eventId])
   @@index([orgId, ts]) // rollup day recompute (and funnels, Phase 3)
   @@index([orgId, receivedAt]) // rollup dirty-day scan (D-008)
+  @@index([orgId, userId, eventName, ts, id]) // funnel next-step seek (D-017)
 }
 
 model DeadLetterEvent {
@@ -80,4 +81,15 @@ model RollupWatermark {
   org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   receivedAt DateTime @db.Timestamptz(6)
   ranAt      DateTime @db.Timestamptz(6)
+}
+
+// One row per (day, event, user) with at least one event: retention's source (D-015). Rebuilt with the day, like RollupDaily.
+model RollupUserDay {
+  orgId     String   @db.Uuid
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  eventName String
+  userId    String
+
+  @@id([orgId, day, eventName, userId])
 }

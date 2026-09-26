@@ -47,6 +47,7 @@ and go in `.env.local`; without them email is captured in the database, billing 
 | `npm run rollups:run` | rebuilds the UTC days dirtied since each org's watermark (also runs on the `/api/cron` tick) |
 | `npm run rollups:verify` | rollup count/uniques vs. raw events per (org, day, event); exits 1 on drift |
 | `npm run bench:rollups [-- N]` | ingests N events (default 100k) into a throwaway org, times ingest + one rollup run, verifies, deletes it |
+| `npm run bench:queries [-- N]` | ingests N random events (default 1M, 20k users, 90 days) into a throwaway org, rolls up, times a 3-step funnel and the retention triangle (median of 3), deletes it |
 
 ## Performance
 
@@ -57,6 +58,8 @@ no other database load. Medians of 3.
 |---|---|---|
 | Rollup of 100k new events spread over 31 days (daily counts, uniques, 2 registered props) | `npm run bench:rollups` | **~0.83s** (800–863ms warm; 1.44s on the first, cold run); `rollups:verify` clean |
 | Write cost of the `(orgId, ts)` + `(orgId, receivedAt)` Event indexes | `npm run bench:rollups` vs `BENCH_NO_INDEXES=1 npm run bench:rollups` | not measurable at 100k: ~72k vs ~70k ev/s, inside run-to-run noise (±5%). Re-measure at 1M rows in Phase 4 |
+| 3-step funnel, 30-day range, 7-day window, over 1M events / 20k users / 90 days (uniform event names: every user re-enters, a worst case) | `npm run bench:queries` | **256–496ms** over 4 runs (median of 3 each). Without `Event(orgId, userId, eventName, ts, id)`: >9.5 min, cancelled (D-017) |
+| Retention triangle, 13 weekly cohorts × 8 periods, same 1M events, from `RollupUserDay` | `npm run bench:queries` | **425–896ms** over 4 runs (median of 3 each; the slowest ran with 2M dead `Event` tuples from earlier bench deletes, before a VACUUM) |
 
 The ingest rate above calls `ingest()` in process: it prices the SQL, not HTTP. P0-1's ≥1,000 events/sec over `/ingest` is measured by `load:run` (Phase 4).
 

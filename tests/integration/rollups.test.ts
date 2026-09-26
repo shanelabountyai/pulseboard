@@ -8,7 +8,7 @@ let orgId: string;
 
 beforeEach(async () => {
   advanceClock(0);
-  await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "RollupDaily", "RollupDailyProp", "RegisteredProperty", "RollupWatermark", "Org" CASCADE`;
+  await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "RollupDaily", "RollupDailyProp", "RollupUserDay", "RegisteredProperty", "RollupWatermark", "Org" CASCADE`;
   orgId = (await db.org.create({ data: { slug: 'acme', name: 'Acme' } })).id;
 });
 afterAll(() => db.$disconnect());
@@ -103,8 +103,11 @@ describe('rollups', () => {
     expect(await verifyRollups()).toEqual([]); // nothing rolled up yet: pending
     await runRollups();
     await db.rollupDaily.updateMany({ where: { orgId }, data: { count: 5 } });
-    expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [5, 2] }]);
+    expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [5, 2], userDays: 2 }]);
     await db.rollupDaily.deleteMany({ where: { orgId } });
-    expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [0, 0] }]);
+    expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [0, 0], userDays: 2 }]);
+    await runRollups(); // nothing new since the watermark except the overlap: day 0 is rebuilt clean
+    await db.rollupUserDay.deleteMany({ where: { orgId, userId: 'u2' } });
+    expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [2, 2], userDays: 1 }]);
   });
 });

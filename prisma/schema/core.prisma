@@ -92,6 +92,7 @@ model Org {
   rollupProps    RollupDailyProp[] // app
   propRegistry   RegisteredProperty[] // app
   rollupMark     RollupWatermark? // app
+  rollupUserDays RollupUserDay[] // app
 }
 
 model Membership {
