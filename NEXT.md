@@ -7,14 +7,16 @@ isolation) and hand-computed retention cohorts (UTC week boundary, late event mo
 un-started weeks null). Mutation-checked: each engine rule flipped fails a fixture. D-015…D-018.
 Measured at 1M events (`npm run bench:queries`): funnel 256–496ms, retention 425–896ms. First-touch table not needed.
 
-## Next item: Phase 4 — dashboard + load harness (PRD P0-5, P0-1 load, seed). Model: Sonnet for UI wiring; Opus for `load:run`.
+**Phase 4a done 2026-09-26:** `seed:generate` (org `demo`, 1.03M events, funnel 20.0k → 14.9k → 4.9k, retention decays to a floor;
+rebuilds the org each run, ~4 min, ANALYZEs at the end: without it retention ran >10 min on stale stats). `BENCH_ORG=demo npm run bench:queries`
+times the seed: funnel 211–236ms, retention 428–500ms (README row added). Demo org has registered props `plan`, `platform`.
 
-1. `seed:generate`: 1M events / ~20k users / 90 days with shaped funnel dropoff and retention decay (PRD §seed).
-   Re-run `bench:queries` against it and add a README row (the current numbers are the uniform worst case).
-2. Dashboard (P0-5): trends (RollupDaily, property filter from RollupDailyProp values), one saved funnel,
+## Next item: Phase 4b — dashboard (PRD P0-5). Model: Sonnet (UI wiring).
+
+1. Dashboard: trends (RollupDaily, property filter from RollupDailyProp values), one saved funnel (signup → view → purchase),
    retention triangle, date-range picker, "data as of" = `RollupWatermark.ranAt` on every chart.
-   Retention omits weeks with no new users (D-018) — the UI fills them or says so.
-3. `load:run`: ≥1,000 events/sec over HTTP `/ingest` (P0-1).
+   Retention omits weeks with no new users (D-018), so the UI fills them or says so.
+2. Then Phase 4c: `load:run`, >=1,000 events/sec over HTTP `/ingest` (P0-1). Model: Opus.
 
 Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
 index write cost at 1M rows (D-011, now three query indexes: A/B it in `load:run`, `bench:queries` ingest rate is too noisy — 55–63k ev/s);
