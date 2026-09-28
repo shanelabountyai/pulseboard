@@ -1,12 +1,9 @@
 # NEXT
 
-> **Foundation upgrade waiting (2026-09-27): `v1.0.2`** — FR-01 outbox fix (send no longer inside the claim tx; a slow provider
-> was delivered but never recorded, then re-sent every cron run). `git fetch template --tags && git merge v1.0.2`, no migration;
-> re-run your outbox tests (a clone that wraps `drainOutbox` or its transports may conflict).
-> **Then `v1.0.3` (security, take within 7 days)** — FR-02..05: pending-MFA 10-min TTL + daily wrong-code cap, invite send caps,
-> org bound to one Stripe subscription (checkout refused while live), org deletion cancels the subscription first.
-> `git merge v1.0.3`, then **`npm run db:migrate`** (adds `BillingAccount.stripeSubscriptionId`; deployed clones: migrate prod too).
-> New clone-owned `src/app/org-hooks.ts`; a custom `PaymentProvider` needs `cancel()`. v1.1.0 (FR-06..11) follows.
+**Foundation v1.0.3 merged 2026-09-28** (v1.0.2 FR-01 outbox + v1.0.3 security FR-02..05); local dev + test migrated; 156/156, drift clean.
+Template defect found: its v1.0.2/v1.0.3 tags left `FOUNDATION_VERSION` at `v1.0.1`, so the pin is set here and excused in
+`FOUNDATION_PATCHES.md` (remove that entry at the v1.1.0 merge). **Still to do in the template repo:** bump this clone's `CLONES.md` row to v1.0.3.
+**v1.1.0 (FR-06..11) is tagged**, not security; take it before closure.
 
 **Phase 3 done 2026-09-26:** funnels + retention (PRD P0-3/P0-4). `src/lib/funnels.ts` (raw `Event`, the documented
 exemption) and `src/lib/retention.ts` (reads the new `RollupUserDay` rollup, covered by `rollups:verify`).
@@ -30,9 +27,9 @@ after `seed:generate`; check chart shapes, and that the default 90d range is fas
 reproducible under overload). D-011 index A/B: no throughput cost, worse tail near saturation, kept. README → Performance.
 Measure only on a quiet machine: other sessions' vitest sweeps pushed load avg to 48 and made the first runs read p95 2.3s.
 
-## Next item: foundation upgrade `v1.0.2` then `v1.0.3` (security, due by 2026-10-04; notice above). Model: Opus.
+## Next item: Phase 4d: design system (D-019; artifact first, via Artifact quickstart). Model: Opus for the system, Sonnet fine for 4e.
 
-Then **Phase 4d: design system** (D-019; artifact first, via Artifact quickstart), then **4e: apply it** to `/o/[org]` (also fix the "SaaS Foundation" title).
+Then **4e: apply it** to `/o/[org]` (also fix the "SaaS Foundation" title).
 Then WRITEUP.md (funnel exemption goes there) and closure deliverables.
 
 Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
