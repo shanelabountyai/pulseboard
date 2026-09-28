@@ -14,13 +14,13 @@
 
 Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020; not yet reviewed by Shane on the live page).
 
-## Next item: foundation v1.1.0 + v1.1.1 merge — **v1.1.1 is `security:`, due 2026-10-05**
+## Next item: cost review (Sonnet), then LinkedIn posts (Opus or Sonnet, `linkedin-personal-brand-shane` skill)
 
-v1.1.0 (FR-06..11) and v1.1.1 (6 LOWs: stale sign-in links, TOTP concurrent double-issue, IPv6 rate-limit /64 scoping,
-orphaned share links, non-atomic audit writes) are both tagged. Take them together. At the v1.1.0 merge, delete the
-`FOUNDATION_VERSION` entry in `FOUNDATION_PATCHES.md` (v1.1.0 ships the file correct). Also in the template repo: bump this
-clone's `CLONES.md` row. Model: Opus (security merge). Then the two closure items above (LinkedIn: Opus or Sonnet with the
-`linkedin-personal-brand-shane` skill; cost review: Sonnet).
+Foundation merged to **v1.2.0** 2026-09-28 (covers v1.1.0, the `security:` v1.1.1, and F-03); template `CLONES.md` row bumped.
+Clone-side changes: `/ingest` carries `// public:` for the FR-06 guard check; `FOUNDATION_PATCHES.md` is empty. Locally,
+the invariant controls timed out at 20s under load 30+ (same control 1.9s vs 19.98s across runs); CI run 36494953585 green (ci + modules-removed).
+Not done: pulseboard's `OrgNav.tsx` Billing link has no `{/* billing */}` marker, so `check-modules` would leave a dead link
+after billing removal. Harmless while billing stays; mark it if the module is ever dropped.
 
 ## Open, carried
 
