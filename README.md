@@ -49,6 +49,7 @@ and go in `.env.local`; without them email is captured in the database, billing 
 | `npm run bench:rollups [-- N]` | ingests N events (default 100k) into a throwaway org, times ingest + one rollup run, verifies, deletes it |
 | `npm run seed:generate [-- slug users]` | rebuilds org `demo`: ~1.03M events / 20k users / 90 days with shaped funnel dropoff and retention decay, rolls up, ANALYZEs (~4 min) |
 | `npm run bench:queries [-- N]` | ingests N random events (default 1M, 20k users, 90 days) into a throwaway org, rolls up, times a 3-step funnel and the retention triangle (median of 3), deletes it |
+| `npm run load:run [-- rate batch seconds]` | open-loop HTTP load on a running server (`npm run build && npm start`): fires `rate` ev/s as `batch`-event `/ingest` requests (default 1000, 50, 60s) into a throwaway org, prints sustained ev/s and p50/p95/p99 latency, checks stored rows = accepted and that a replayed batch is all duplicates, deletes the org. `BENCH_NO_INDEXES=1` drops the 3 Event query indexes for the run |
 
 ## Performance
 
@@ -63,7 +64,18 @@ no other database load. Medians of 3.
 | Retention triangle, 13 weekly cohorts × 8 periods, same 1M events, from `RollupUserDay` | `npm run bench:queries` | **425–896ms** over 4 runs (median of 3 each; the slowest ran with 2M dead `Event` tuples from earlier bench deletes, before a VACUUM) |
 | 3-step funnel and retention triangle over the seeded org (1.03M events, shaped dropoff: 20.0k → 14.9k → 4.9k users) | `BENCH_ORG=demo npm run bench:queries` (after `seed:generate`) | funnel **211–236ms**, retention **428–500ms** over 4 runs (median of 3 each) |
 
-The ingest rate above calls `ingest()` in process: it prices the SQL, not HTTP. P0-1's ≥1,000 events/sec over `/ingest` is measured by `load:run` (Phase 4).
+The `bench:queries` ingest rate calls `ingest()` in process: it prices the SQL, not HTTP. Over HTTP, `load:run`
+(2026-09-28, same M4, production build `next start`, load client on the same machine, other sessions' background
+load avg 4–13). Open loop: latency counts from each request's scheduled send time, so falling behind shows as latency.
+Every run below stored exactly the accepted rows, and a replayed batch came back 100% duplicates.
+
+| What | Command | Result |
+|---|---|---|
+| **P0-1 target: 1,000 ev/s for 60s**, 50 events/request (20 req/s) | `npm run load:run` | **1,000 ev/s sustained, p95 15ms** (p50 10, p99 28, max 106), 0 failures |
+| 1,000 ev/s for 60s, **1 event/request** (1,000 req/s) | `npm run load:run -- 1000 1 60` | 1,000 ev/s, p95 6ms (p99 23, max 76), 0 failures |
+| Headroom, 50/request, 30s at 5k / 10k / 20k and 20s at 40k ev/s | `npm run load:run -- <rate> 50 <s>` | all sustained on schedule; p95 14 / 10 / 8 / 7ms, 0 failures |
+| Saturation, 80k ev/s target | `npm run load:run -- 80000 50 20` / `80000 500 20` | **61k ev/s** (50/req) and **70k ev/s** (500/req) on a quieter machine, matching the in-process 55–63k: Postgres, not HTTP, is the ceiling. Repeats later fell to 28–42k with client-side `fetch failed` as >10k requests queued: overload numbers are not reproducible, so the ceiling is quoted as a range |
+| Write cost of the 3 Event query indexes (D-011), 40k ev/s × 20s, alternating 3 pairs | `load:run -- 40000 50 20` vs `BENCH_NO_INDEXES=1 …` | throughput identical (all on schedule); tail latency consistently worse with them: p95 **26 / 141 / 2,312ms** with vs **22 / 15 / 693ms** without. Both drift upward run to run (table growth, background load), so the direction is real and the size is not. Irrelevant at the 1,000 ev/s target |
 
 ## Layout
 
