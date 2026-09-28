@@ -1,9 +1,27 @@
 # NEXT
 
+**Every item:** run `gh run list --limit 3` before starting and after pushing. If CI is red, fixing it is the item, ahead of the queue.
+
+**CI fixed 2026-09-28:** `e2e/onboarding.spec.ts:38` was asserting the template's old empty-state heading
+("Nothing here yet"), which Phase 4b's dashboard (2026-09-26) replaced with a real notice paragraph
+("No events have been rolled up for this org yet..."). Spec updated to match — confirmed the dashboard's
+behavior was correct, not a regression. Full local sweep green in CI's own order (vitest → e2e build+serve):
+lint, typecheck, 156 vitest, 10/10 playwright.
+Also found and diagnosed (not a CI issue, no fix needed): local `pulseboard_test` can end a `npm test` run
+with a leftover `Org` row named "Acme" instead of "Acme Studio", because several integration tests
+(`tests/integration/{dashboard,funnels,ingest,retention,rollups}.test.ts`) create `slug: 'acme', name: 'Acme'`
+and nothing truncates `Org` after the last one runs — final state depends on vitest's local file-scheduling
+order (which file runs last), so it's non-deterministic on a laptop with a warm vitest cache. `scripts/seed-demo.ts`'s
+`org.upsert(..., update: {})` then never corrects the name, breaking `e2e/demo.spec.ts` locally only. CI is
+unaffected (fresh empty DB every run). If `demo.spec.ts` ever fails locally with "waiting for link 'Acme Studio'",
+`TRUNCATE "Org" CASCADE` and rerun — not a code bug.
+
 **Foundation v1.0.3 merged 2026-09-28** (v1.0.2 FR-01 outbox + v1.0.3 security FR-02..05); local dev + test migrated; 156/156, drift clean.
 Template defect found: its v1.0.2/v1.0.3 tags left `FOUNDATION_VERSION` at `v1.0.1`, so the pin is set here and excused in
 `FOUNDATION_PATCHES.md` (remove that entry at the v1.1.0 merge). **Still to do in the template repo:** bump this clone's `CLONES.md` row to v1.0.3.
-**v1.1.0 (FR-06..11) is tagged**, not security; take it before closure.
+**v1.1.0 (FR-06..11) is tagged**, not security; take it before closure. **v1.1.1 is also tagged** (2026-09-28, `security:` —
+6 LOWs: stale sign-in links, TOTP concurrent double-issue, IPv6 rate-limit /64 scoping, orphaned share links, non-atomic
+audit writes). `security:` releases are due within 7 days — **v1.1.1 is due 2026-10-05**. Take both together.
 
 **Phase 3 done 2026-09-26:** funnels + retention (PRD P0-3/P0-4). `src/lib/funnels.ts` (raw `Event`, the documented
 exemption) and `src/lib/retention.ts` (reads the new `RollupUserDay` rollup, covered by `rollups:verify`).
