@@ -15,8 +15,10 @@ export const addProject = orgAction(
   null,
   z.object({ name: z.string().trim().min(1, 'Give the project a name.').max(120), notes: z.string().max(2000).default('') }),
   async (ctx, i) => {
-    const p = await db.project.create({ data: { ...inOrg(ctx), name: i.name, notes: i.notes } });
-    await audit(ctx, 'project.created', { targetType: 'project', targetId: p.id });
+    await db.$transaction(async (tx) => {
+      const p = await tx.project.create({ data: { ...inOrg(ctx), name: i.name, notes: i.notes } });
+      await audit(ctx, 'project.created', { targetType: 'project', targetId: p.id }, tx);
+    });
     redirect(page(ctx));
   },
 );

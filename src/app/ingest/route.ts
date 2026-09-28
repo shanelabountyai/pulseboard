@@ -1,3 +1,4 @@
+// public: authenticated by a hashed write key (orgForWriteKey), not a session
 import { ingest, MAX_BATCH, MAX_BODY_BYTES, orgForWriteKey } from '@/lib/ingest';
 
 const fail = (status: number, error: string) => Response.json({ error }, { status });

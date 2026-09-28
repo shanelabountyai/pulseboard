@@ -45,3 +45,6 @@ export function userAction<S extends z.ZodType, R>(
 
 /** An id of a row the harness must scope: `ref('invite')`. */
 export const ref = (model: string) => z.uuid().meta({ ref: model });
+
+/** A field named like an id that is not a row id (an emailed token, a new slug): `notRef(z.string())`. */
+export const notRef = <S extends z.ZodType>(s: S) => s.meta({ notRef: true });

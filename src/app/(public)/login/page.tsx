@@ -1,3 +1,4 @@
+// public: the sign-in form
 export const metadata = { title: 'Sign in' };
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ sent?: string; expired?: string }> }) {

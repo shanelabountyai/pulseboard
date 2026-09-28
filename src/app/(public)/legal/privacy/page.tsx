@@ -1,3 +1,4 @@
+// public: static legal text
 export const metadata = { title: 'Privacy' };
 
 // STUB. Replace with your own policy before launch; this text is not legal advice and covers nothing.

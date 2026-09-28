@@ -87,15 +87,20 @@ Every run below stored exactly the accepted rows, and a replayed batch came back
 
 ## Removing a module
 
-Delete the paths listed for it in `scripts/foundation-modules.ts`, the lines ending `// billing` or `// notifications`
-in `prisma/schema/core.prisma` and `src/app/cron-jobs.ts`, and the module's nav link in `src/app/o/[org]/layout.tsx`.
+Delete the paths listed for it in `scripts/foundation-modules.ts`, and the lines marked `// billing` or `// notifications`
+(`{/* billing */}` in `layout.tsx`) in `prisma/schema/core.prisma`, `src/app/cron-jobs.ts` and `src/app/o/[org]/layout.tsx` —
+that includes the module's nav link, so it goes with the rest.
 `foundation:check-modules` does exactly this in a scratch copy and requires validate, typecheck, build and drift to pass.
 The module's tables stay in the migration history; drop them with a clone migration if you want them gone.
+
+If your own code imports a module outside the marked lines (a clone's own routes or lib files, not just
+`cron-jobs.ts`/`org-hooks.ts`), list it in `src/app/required-modules.ts`. `check-modules` leaves a required module in
+place and still removes the rest.
 
 ## Staying current
 
 Template-owned paths (core, modules, invariants, security routes) are never edited in a clone, so `git merge vX.Y.Z` is clean.
-An urgent local patch goes in `FOUNDATION_PATCHES.md` (path and reason) and moves upstream at the next release.
+An urgent local patch goes in `FOUNDATION_PATCHES.md` as `` `path` `hash` — reason `` (drift prints the hash to paste in) and moves upstream at the next release. The excuse stops matching, and drift fails again, once that path changes further.
 Upgrade steps and versioning rules: `IMPLEMENTATION_PLAN.md` §3.3.
 
 ## Not included

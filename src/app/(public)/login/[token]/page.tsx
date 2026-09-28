@@ -1,3 +1,4 @@
+// public: renders a button, spends nothing (INV-17)
 export const metadata = { title: 'Sign in', robots: { index: false } };
 
 // GET renders a button and spends nothing, so a mail scanner that follows the link cannot

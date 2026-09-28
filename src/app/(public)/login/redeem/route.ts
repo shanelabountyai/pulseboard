@@ -1,3 +1,4 @@
+// public: the token is the credential; same-origin POST (INV-17)
 import { redeemLink } from '@/core/auth/link';
 import { setSessionCookie } from '@/core/auth/session';
 import { isSameOrigin } from '@/core/http';

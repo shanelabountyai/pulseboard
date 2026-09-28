@@ -1,3 +1,4 @@
+// public: 404s unless DEMO_MODE (INV-27)
 import { notFound } from 'next/navigation';
 import { demoEnabled, listDemoUsers } from '@/core/auth/demo';
 

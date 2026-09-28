@@ -1,3 +1,4 @@
+// public: the share token is the credential (INV-08)
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { clientIp } from '@/core/http';

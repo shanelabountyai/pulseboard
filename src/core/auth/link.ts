@@ -102,6 +102,8 @@ export async function confirmEmailChange(s: SessionCtx, token: string): Promise<
     await db.$transaction(async (tx) => {
       await tx.user.update({ where: { id: s.userId }, data: { email } });
       await tx.session.deleteMany({ where: otherSessions(s) });
+      // K1: any other unused sign-in link for this account (sent to the old address) dies too.
+      await tx.loginToken.updateMany({ where: { userId: s.userId, purpose: { in: ['login', 'signup'] }, usedAt: null }, data: { usedAt: t } });
       await tx.invite.updateMany({ where: { email: s.email, acceptedAt: null, revokedAt: null }, data: { revokedAt: t } });
       await audit({ userId: s.userId }, 'account.email_changed', { targetType: 'user', targetId: s.userId }, tx);
     });

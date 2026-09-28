@@ -3,14 +3,16 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
-import { env } from '@/core/env';
 import { Refused } from '@/core/errors';
 import { hashToken, newToken } from '@/core/tokens';
 
 // Hashed DB sessions (groundwork `src/session.ts`). The cookie holds the raw token and the
 // row only its sha256, so a database read signs no one in (INV-07). Every request reads the
 // row, so deleting it is instant revocation (INV-05).
-export const SESSION_COOKIE = 'session';
+// __Host- (K1): the browser refuses it without Secure, Path=/ and no Domain, so it can't be
+// set by a subdomain or over plain http. Secure is unconditional for the same reason; modern
+// browsers treat http://localhost as a secure context, so local dev still works.
+export const SESSION_COOKIE = '__Host-session';
 const TTL_MS = 30 * 24 * 3600_000;
 const FRESH_MS = 5 * 60_000;
 // An enrolled user's session that has not passed TOTP dies after this, so one link buys a
@@ -43,9 +45,7 @@ export async function createSession(userId: string, opts: { mfa?: boolean } = {}
 }
 
 export async function setSessionCookie(token: string) {
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true, sameSite: 'lax', path: '/', maxAge: TTL_MS / 1000, secure: env.APP_URL.startsWith('https:'),
-  });
+  (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: TTL_MS / 1000, secure: true });
 }
 
 export async function sessionFor(token: string | undefined): Promise<SessionCtx | null> {
@@ -83,8 +83,14 @@ export async function signOut() {
   (await cookies()).delete(SESSION_COOKIE);
 }
 
+// K1: an outstanding, unused sign-in link is itself a way back in, so ending every session
+// must end those too, or someone who kept an old link (a compromised inbox, a shared device)
+// can still use it to mint a fresh one.
 export async function signOutEverywhere(userId: string) {
-  await db.session.deleteMany({ where: { userId } });
+  await db.$transaction([
+    db.session.deleteMany({ where: { userId } }),
+    db.loginToken.updateMany({ where: { userId, purpose: { in: ['login', 'signup'] }, usedAt: null }, data: { usedAt: now() } }),
+  ]);
 }
 
 /** A TOTP change, a recovery-code use or an email change keeps only this session (INV-23). */

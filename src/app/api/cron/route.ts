@@ -1,3 +1,4 @@
+// public: CRON_SECRET via isAuthorizedCron (INV-10/11)
 import { isAuthorizedCron } from '@/core/cron';
 import { log } from '@/core/log';
 import { sweepRateLimits } from '@/core/rate-limit';

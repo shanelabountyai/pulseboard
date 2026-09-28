@@ -21,7 +21,7 @@ async function seedOwner() {
 
 test('an owner subscribes through the mock provider, then sees the plan a webhook set', async ({ page, context, baseURL }) => {
   const { org, slug, token } = await seedOwner();
-  await context.addCookies([{ name: 'session', value: token, url: baseURL! }]);
+  await context.addCookies([{ name: '__Host-session', value: token, domain: 'localhost', path: '/', secure: true }]);
 
   await page.goto(`/o/${slug}/settings/billing`);
   await expect(page.getByText('No subscription.')).toBeVisible();

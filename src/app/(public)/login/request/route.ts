@@ -1,3 +1,4 @@
+// public: sends a link; rate-limited (INV-09)
 import { requestLink } from '@/core/auth/link';
 import { clientIp, isSameOrigin } from '@/core/http';
 

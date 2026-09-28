@@ -2,7 +2,8 @@ import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MARKED_FILES, MODULES } from './foundation-modules';
+import { MARKED_FILES, modulesToRemove } from './foundation-modules';
+import { REQUIRED_MODULES } from '../src/app/required-modules';
 
 // Spec §4 / §13.3: delete both modules by the manifest, then the tree must still validate, typecheck and build,
 // and foundation:drift must accept the deletions. Runs in a scratch copy, once per release (CI job `modules-removed`).
@@ -18,16 +19,19 @@ const sh = (cmd: string) => execSync(cmd, { cwd: work, stdio: 'inherit', env });
 execFileSync('rsync', ['-a', '--exclude', '.next', '--exclude', 'src/generated', '--exclude', 'spikes', '--exclude', 'audit', '--exclude', 'test-results', `${root}/`, `${work}/`], { stdio: 'inherit' });
 sh('git add -A >/dev/null && git -c user.email=ci@local -c user.name=ci commit -qm scratch --allow-empty'); // the base for the drift check
 
-for (const [name, paths] of Object.entries(MODULES)) {
+const removed = modulesToRemove(REQUIRED_MODULES);
+for (const [name, paths] of removed) {
   for (const p of paths) rmSync(join(work, p), { recursive: true, force: true });
   for (const f of MARKED_FILES) {
     const text = readFileSync(join(work, f), 'utf8');
-    writeFileSync(join(work, f), text.split('\n').filter((l) => !new RegExp(`// ${name}\\s*$`).test(l)).join('\n'));
+    const marker = new RegExp(`(// ${name}|\\{/\\* ${name} \\*/\\})\\s*$`); // the .tsx form for src/app/o/[org]/layout.tsx
+    writeFileSync(join(work, f), text.split('\n').filter((l) => !marker.test(l)).join('\n'));
   }
 }
 sh('npx prisma validate && npx prisma generate');
 sh('npx tsc --noEmit');
 sh('npx next build');
 sh('npx tsx scripts/foundation-drift.ts --base HEAD');
-console.log('modules removed: validate, generate, typecheck, build and drift all pass');
+const kept = REQUIRED_MODULES.length ? `; ${REQUIRED_MODULES.join(', ')} required, left in place` : '';
+console.log(`modules removed (${removed.map(([name]) => name).join(', ')}${kept}): validate, generate, typecheck, build and drift all pass`);
 rmSync(join(work, '..'), { recursive: true, force: true });

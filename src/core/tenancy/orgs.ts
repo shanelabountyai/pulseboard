@@ -4,6 +4,7 @@ import { audit } from '@/core/audit';
 import type { SessionCtx } from '@/core/auth/session';
 import { AuthzError, type OrgCtx } from '@/core/authz/guards';
 import { mayAssign } from '@/core/authz/permissions';
+import { now } from '@/core/clock';
 import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import type { Prisma } from '@/generated/prisma/client';
@@ -79,6 +80,9 @@ export async function removeMember(ctx: OrgCtx, userId: string) {
     if (!self && !mayAssign(actor, from, null)) throw new AuthzError('members.manage');
     if (from === 'owner') await assertOwnerRemains(tx, ctx.orgId, userId);
     await tx.membership.delete({ where: { orgId_userId: { orgId: ctx.orgId, userId } } });
+    // K6: a share link outlives its creator's membership otherwise — anyone still holding the
+    // URL keeps read access to the org's resource after the person who shared it is gone.
+    await tx.shareLink.updateMany({ where: { orgId: ctx.orgId, createdById: userId, revokedAt: null }, data: { revokedAt: now() } });
     await audit(ctx, self ? 'member.left' : 'member.removed', { targetType: 'user', targetId: userId, data: { role: from } }, tx);
   });
 }

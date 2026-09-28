@@ -1,3 +1,4 @@
+// public: Stripe signature over the raw body (INV-12)
 import { receiveStripeWebhook } from '@/modules/billing/webhook';
 
 export const dynamic = 'force-dynamic';

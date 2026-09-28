@@ -94,8 +94,10 @@ history, so every later fix becomes a hand-copy.
 **Drift check (enforced):** `npm run foundation:drift` runs `git diff $(cat FOUNDATION_VERSION) -- <template-owned paths>`
 and fails if anything differs. It ignores `core.prisma` lines marked `// <module>` when that module's directory is absent (spec §4). It runs in each clone's CI.
 
-**Escape hatch:** a clone that must patch core urgently lists the path and a reason in `FOUNDATION_PATCHES.md`. The drift
-check allows listed paths, and the patch is moved upstream at the next release.
+**Escape hatch:** a clone that must patch core urgently lists the path, a hash of the excused diff, and a reason in
+`FOUNDATION_PATCHES.md` as `` `path` `hash` — reason `` (drift's failure message prints the `` `path` `hash` `` to paste in).
+The hash is fingerprinted from the diff itself, so a further edit to that path changes the hash and drift fails again —
+the excuse does not survive edits made after it was written. The patch is moved upstream at the next release.
 
 ### 3.3 Release and upgrade flow
 

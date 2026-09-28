@@ -53,9 +53,11 @@ export async function createInvite(ctx: OrgCtx, emailInput: string, role: Role) 
 
 export async function revokeInvite(ctx: OrgCtx, id: string) {
   if (!can(ctx.role, 'members.manage')) throw new AuthzError('members.manage');
-  const { count } = await db.invite.updateMany({ where: { id, ...inOrg(ctx), acceptedAt: null, revokedAt: null }, data: { revokedAt: now() } });
-  if (count !== 1) notFound();
-  await audit(ctx, 'invite.revoked', { targetType: 'invite', targetId: id });
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.invite.updateMany({ where: { id, ...inOrg(ctx), acceptedAt: null, revokedAt: null }, data: { revokedAt: now() } });
+    if (count !== 1) notFound();
+    await audit(ctx, 'invite.revoked', { targetType: 'invite', targetId: id }, tx);
+  });
 }
 
 /**

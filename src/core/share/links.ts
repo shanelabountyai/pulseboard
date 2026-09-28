@@ -21,19 +21,24 @@ export async function createShareLink(ctx: OrgCtx, resourceType: ShareType, reso
   if (!can(ctx.role, 'share.create')) throw new AuthzError('share.create');
   if (!(await shareable[resourceType](ctx.orgId, resourceId))) notFound();
   const token = newToken();
-  const link = await db.shareLink.create({
-    data: { ...inOrg(ctx), resourceType, resourceId, tokenHash: hashToken(token), createdById: ctx.userId, expiresAt: new Date(now().getTime() + days * 86_400_000) },
+  const url = await db.$transaction(async (tx) => {
+    const link = await tx.shareLink.create({
+      data: { ...inOrg(ctx), resourceType, resourceId, tokenHash: hashToken(token), createdById: ctx.userId, expiresAt: new Date(now().getTime() + days * 86_400_000) },
+    });
+    await audit(ctx, 'share.created', { targetType: 'shareLink', targetId: link.id, data: { resourceType, resourceId, days } }, tx);
+    return `${env.APP_URL}/s/${token}`;
   });
-  await audit(ctx, 'share.created', { targetType: 'shareLink', targetId: link.id, data: { resourceType, resourceId, days } });
-  return `${env.APP_URL}/s/${token}`;
+  return url; // the raw token exists only in this response
 }
 
 /** Takes effect on the next read (INV-08): the lookup filters on revokedAt. */
 export async function revokeShareLink(ctx: OrgCtx, id: string) {
   if (!can(ctx.role, 'share.revoke')) throw new AuthzError('share.revoke');
-  const { count } = await db.shareLink.updateMany({ where: { id, ...inOrg(ctx), revokedAt: null }, data: { revokedAt: now() } });
-  if (count !== 1) notFound();
-  await audit(ctx, 'share.revoked', { targetType: 'shareLink', targetId: id });
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.shareLink.updateMany({ where: { id, ...inOrg(ctx), revokedAt: null }, data: { revokedAt: now() } });
+    if (count !== 1) notFound();
+    await audit(ctx, 'share.revoked', { targetType: 'shareLink', targetId: id }, tx);
+  });
 }
 
 /**

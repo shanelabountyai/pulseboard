@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { drift, type Change } from '../../scripts/foundation-drift';
-import { rewrite } from '../../scripts/new-project';
+import { drift, hashOf, patchedHash, type Change } from '../../scripts/foundation-drift';
+import { MODULES, modulesToRemove } from '../../scripts/foundation-modules';
+import { portInUse, rewrite } from '../../scripts/new-project';
 
 const none = () => false;
 const edit = (path: string, ...lines: string[]): Change => ({ status: 'M', path, lines });
@@ -23,6 +24,11 @@ describe('foundation:drift rules', () => {
     expect(drift([c], new Set(['billing']), none)).toEqual([]);
     expect(drift([edit('prisma/schema/core.prisma', '-  outbox Outbox[] // notifications')], new Set(['billing']), none)).toHaveLength(1);
   });
+  it('allows the {/* billing */} nav-link line in layout.tsx to go once billing is absent (FR-10)', () => {
+    const c = edit('src/app/o/[org]/layout.tsx', "-        {can(ctx.role, 'billing.manage') && <> · <Link href={`${base}/settings/billing`}>Billing</Link></>} {/* billing */}");
+    expect(drift([c], new Set(), none)).toHaveLength(1); // still there while billing exists: real drift
+    expect(drift([c], new Set(['billing']), none)).toEqual([]); // billing's own removal, not a clone edit
+  });
   it('allows a deleted module to stay deleted, and only that module', () => {
     const del = (path: string): Change => ({ status: 'D', path, lines: [] });
     expect(drift([del('src/modules/billing/webhook.ts'), del('src/app/o/[org]/settings/billing/page.tsx')], new Set(['billing']), none)).toEqual([]);
@@ -32,8 +38,34 @@ describe('foundation:drift rules', () => {
     expect(drift([{ status: 'A', path: 'prisma/migrations/20270101000000_tasks/migration.sql', lines: [] }, { status: 'A', path: 'prisma/schema/app.prisma', lines: [] }], new Set(), none)).toEqual([]);
     expect(drift([edit('prisma/migrations/20260923000000_core_init/migration.sql', '+x')], new Set(), none)).toHaveLength(1);
   });
-  it('allows a path listed in FOUNDATION_PATCHES.md', () => {
-    expect(drift([edit('src/core/tokens.ts', '+x')], new Set(), (p) => p === 'src/core/tokens.ts')).toEqual([]);
+  it('allows a path listed in FOUNDATION_PATCHES.md with its current hash', () => {
+    const c = edit('src/core/tokens.ts', '+x');
+    const patches = `- \`src/core/tokens.ts\` \`${hashOf(c)}\` — urgent fix, moves upstream next release`;
+    expect(drift([c], new Set(), (x) => patchedHash(patches, x.path) === hashOf(x))).toEqual([]);
+  });
+  it('flags it again once the diff moves on from the excused hash (FR-09)', () => {
+    const excusedAt = edit('src/core/tokens.ts', '+x');
+    const patches = `- \`src/core/tokens.ts\` \`${hashOf(excusedAt)}\` — urgent fix`;
+    const furtherEdit = edit('src/core/tokens.ts', '+x', '+y'); // same path, edited again since the patch was written
+    expect(drift([furtherEdit], new Set(), (c) => patchedHash(patches, c.path) === hashOf(c))).toEqual(['M src/core/tokens.ts']);
+  });
+  it('patchedHash reads the hash back for its path only', () => {
+    const patches = '- `src/core/tokens.ts` `abc123def456` — reason\n- `src/core/cron.ts` `111111111111` — other reason';
+    expect(patchedHash(patches, 'src/core/tokens.ts')).toBe('abc123def456');
+    expect(patchedHash(patches, 'src/core/cron.ts')).toBe('111111111111');
+    expect(patchedHash(patches, 'src/core/other.ts')).toBeUndefined();
+  });
+});
+
+describe('modulesToRemove (F-03)', () => {
+  it('removes every module when none is required', () => {
+    expect(modulesToRemove([]).map(([name]) => name)).toEqual(Object.keys(MODULES));
+  });
+  it('leaves a required module out of the removal list, and still removes the rest', () => {
+    expect(modulesToRemove(['notifications']).map(([name]) => name)).toEqual(['billing']);
+  });
+  it('throws on a name that is not a real module, instead of silently doing nothing', () => {
+    expect(() => modulesToRemove(['typo'])).toThrow(/unknown module "typo"/);
   });
 });
 
@@ -52,5 +84,16 @@ describe('new-project rewrite', () => {
     expect(o.playwright).toContain('4200');
     expect(o.ci).toBe('APP_URL: http://localhost:4200\nmy_app_test');
     expect(o.readme).toMatch(/^# my-app\n\n> Cloned from saas-foundation v1\.0\.0\. Port 4200/);
+  });
+  it('refuses a second run: once package.json is already renamed (FR-11)', () => {
+    const ranOnce = { ...files, pkg: JSON.stringify({ name: 'my-app', scripts: { dev: 'next dev -p 4200' } }) };
+    expect(() => rewrite(ranOnce, 'my-app', '4200', 'v1.0.0')).toThrow(/already run here/);
+  });
+  it('portInUse flags "in use" and "reserved" rows, but not "free" (FR-11)', () => {
+    const claudeMd = '| storage business | **3000** | in use | ... |\n| `devdash` | **4400** | reserved | ... |\n| *next project* | **4700** | free | take it |\n';
+    expect(portInUse(claudeMd, '3000')).toBe(true);
+    expect(portInUse(claudeMd, '4400')).toBe(true);
+    expect(portInUse(claudeMd, '4700')).toBe(false); // the next free port must stay pickable
+    expect(portInUse(claudeMd, '4800')).toBe(false); // not in the table at all
   });
 });

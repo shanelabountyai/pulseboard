@@ -64,6 +64,7 @@ export async function pendingEnrolment(s: SessionCtx): Promise<{ uri: string; se
  */
 export async function confirmTotp(code: string): Promise<string[] | null> {
   const s = await requireUser();
+  assertFresh(s);
   const secret = (await pendingEnrolment(s))?.secret;
   if (!secret) return null;
   const step = matchStep(secret, code);
@@ -71,13 +72,22 @@ export async function confirmTotp(code: string): Promise<string[] | null> {
 
   const codes = Array.from({ length: 10 }, () => randomBytes(5).toString('hex').replace(/^(.{5})/, '$1-'));
   const t = now();
-  await db.$transaction([
-    db.user.update({ where: { id: s.userId }, data: { totpSecretSealed: sealSecret(secret, 'totp'), totpEnrolledAt: t, totpLastStep: step } }),
-    db.recoveryCode.deleteMany({ where: { userId: s.userId } }),
-    db.recoveryCode.createMany({ data: codes.map((c) => ({ hash: recoveryHash(c), userId: s.userId })) }),
-    db.session.deleteMany({ where: otherSessions(s) }),
-    db.session.update({ where: { hash: s.hash }, data: { mfaAt: t } }),
-  ]);
+  // K2: `totpEnrolledAt: null` in the WHERE claims the row. Two concurrent confirms both race
+  // to update it; Postgres serializes them on the row lock, and the loser's WHERE no longer
+  // matches once it re-checks, so it gets count 0 instead of also inserting 10 recovery codes.
+  const claimed = await db.$transaction(async (tx) => {
+    const { count } = await tx.user.updateMany({
+      where: { id: s.userId, totpEnrolledAt: null },
+      data: { totpSecretSealed: sealSecret(secret, 'totp'), totpEnrolledAt: t, totpLastStep: step },
+    });
+    if (count !== 1) return false;
+    await tx.recoveryCode.deleteMany({ where: { userId: s.userId } });
+    await tx.recoveryCode.createMany({ data: codes.map((c) => ({ hash: recoveryHash(c), userId: s.userId })) });
+    await tx.session.deleteMany({ where: otherSessions(s) });
+    await tx.session.update({ where: { hash: s.hash }, data: { mfaAt: t } });
+    return true;
+  });
+  if (!claimed) return null;
   (await cookies()).delete(PENDING_COOKIE);
   return codes;
 }

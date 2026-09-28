@@ -20,13 +20,45 @@ type Action = ((...args: unknown[]) => Promise<unknown>) & { spec: ActionSpec };
 const USE_SERVER = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(['"])use server\1/;
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
+const SRC = 'src/**/*.{ts,tsx,js,jsx,mts,mjs}';
+
 /** Every export of every module whose first directive is 'use server'. */
-export async function discover(pattern = 'src/{app,modules}/**/*.{ts,tsx}', cwd = ROOT): Promise<Found[]> {
+export async function discover(pattern = SRC, cwd = ROOT): Promise<Found[]> {
   const out: Found[] = [];
   for (const rel of globSync(pattern, { cwd }).sort()) {
     const file = path.join(cwd, rel);
     if (!USE_SERVER.test(readFileSync(file, 'utf8'))) continue;
     for (const [name, fn] of Object.entries(await import(file))) out.push({ file: rel, name, fn });
+  }
+  return out;
+}
+
+// FR-07: Next registers an inline 'use server' function as an endpoint too, and discover() cannot
+// see it. A directive anywhere but the top of the file is refused; move the action to an actions file.
+const DIRECTIVE = /^\s*(['"])use server\1;?\s*$/gm;
+export function inlineUseServer(pattern = SRC, cwd = ROOT): string[] {
+  return globSync(pattern, { cwd }).sort().filter((rel) => {
+    const src = readFileSync(path.join(cwd, rel), 'utf8');
+    return (src.match(DIRECTIVE)?.length ?? 0) > (USE_SERVER.test(src) ? 1 : 0);
+  });
+}
+
+// FR-06 (rule 1): every page, layout, template and route handler guards itself, because a client-side
+// navigation re-renders the page without re-running its layout. Each exported handler's first awaited
+// call must be a guard, or the file says why it is public with a `// public: <reason>` line.
+const GUARDS = ['requireUser', 'requireOrg'];
+const HANDLER = /^export\s+(?:default\s+)?(?:async\s+)?function\b|^export\s+const\s+(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*=/gm;
+export function unguardedEntrypoints(pattern = 'src/app/**/{page,layout,template,default,route}.{ts,tsx,js,jsx}', cwd = ROOT): string[] {
+  const out: string[] = [];
+  for (const rel of globSync(pattern, { cwd }).sort()) {
+    const src = readFileSync(path.join(cwd, rel), 'utf8');
+    if (/^\/\/ public: \S/m.test(src)) continue;
+    const starts = [...src.matchAll(HANDLER)].map((m) => m.index);
+    if (!starts.length) out.push(`${rel}: no exported handler found`);
+    starts.forEach((at, i) => {
+      const first = src.slice(at, starts[i + 1]).match(/\bawait\s+([\w$.]+)/)?.[1];
+      if (!GUARDS.includes(first ?? '')) out.push(`${rel}: first await is ${first ?? 'none'}, not ${GUARDS.join('/')}`);
+    });
   }
   return out;
 }
@@ -97,8 +129,10 @@ async function call(fn: Action, as: string | null, input: unknown, mfa = true): 
 }
 
 // ---- input from the schema: each ref('<model>') field gets a fixture id, others a valid value
-type J = { type?: string; format?: string; ref?: string; properties?: Record<string, J>; items?: J; enum?: unknown[]; const?: unknown; minLength?: number; minimum?: number; anyOf?: J[] };
+type J = { type?: string; format?: string; ref?: string; notRef?: boolean; properties?: Record<string, J>; items?: J; enum?: unknown[]; const?: unknown; minLength?: number; minimum?: number; anyOf?: J[] };
 type Pick = (ref: string, path: string) => string;
+const ID_FORMATS = ['uuid', 'guid', 'cuid', 'cuid2', 'ulid', 'nanoid', 'xid', 'ksuid'];
+const ID_NAME = /^ids?$|Ids?$|[sS]lug|[tT]oken/;
 
 export function generate(schema: z.ZodType, pick: Pick): { value: unknown; refPaths: string[] } {
   const refPaths: string[] = [];
@@ -113,7 +147,9 @@ export function generate(schema: z.ZodType, pick: Pick): { value: unknown; refPa
       case 'array':
         return [walk(j.items ?? {}, `${at}[0]`)];
       case 'string':
-        if (j.format === 'uuid') throw new Error(`untagged uuid at "${at}": use ref('<model>') so the harness can scope it`);
+        // FR-08: an untagged id would be filled with 'x' and skip INV-02/03/04 silently.
+        if (!j.notRef && (ID_FORMATS.includes(j.format ?? '') || ID_NAME.test(at.split('.').pop()!.replace(/\[0\]$/, ''))))
+          throw new Error(`untagged id-like field "${at}": use ref('<model>') so the harness can scope it, or notRef() if it is not a row id`);
         if (j.format === 'email') return 'someone@example.test';
         return 'x'.repeat(Math.max(j.minLength ?? 1, 1));
       case 'integer':

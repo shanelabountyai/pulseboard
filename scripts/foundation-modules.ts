@@ -11,5 +11,12 @@ export const MODULES: Record<string, string[]> = {
   ],
   notifications: ['src/modules/notifications', 'prisma/schema/notifications.prisma', 'tests/integration/outbox.test.ts'],
 };
-// Files whose `// <module>` lines go with the module.
-export const MARKED_FILES = ['prisma/schema/core.prisma', 'src/app/cron-jobs.ts', 'src/app/org-hooks.ts'];
+// Files whose `// <module>` (or, in a .tsx file, `{/* <module> */}`) lines go with the module.
+export const MARKED_FILES = ['prisma/schema/core.prisma', 'src/app/cron-jobs.ts', 'src/app/org-hooks.ts', 'src/app/o/[org]/layout.tsx'];
+
+// F-03: a clone can use a module outside the marked lines (src/app/required-modules.ts), so
+// check-modules must leave that module in place rather than deleting it and failing tsc.
+export function modulesToRemove(required: readonly string[]): [string, string[]][] {
+  for (const m of required) if (!(m in MODULES)) throw new Error(`required-modules.ts: unknown module "${m}"`);
+  return Object.entries(MODULES).filter(([name]) => !required.includes(name));
+}

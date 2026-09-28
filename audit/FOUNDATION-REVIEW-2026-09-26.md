@@ -23,14 +23,14 @@ release, and each clone picks it up in its own session.
 
 ## LOW
 
-- K1 `session.ts:82-84`, `link.ts:92-107`: sign-out-everywhere and email change leave unused login links valid; `redeemLink` does not check the email still matches.
-- K1 `session.ts:13,44`: cookie named `session`, not `__Host-session`; `Secure` derived from `APP_URL`.
-- K2 `totp.ts:64-82`: `confirmTotp` skips `assertFresh`; two concurrent confirms can leave 20 recovery codes.
-- K5 `src/core/http.ts:4`: first `x-forwarded-for` trusted (safe on Vercel only); IPv6 keyed per address, not /64; everyone shares `'unknown'` when absent.
-- K6 `share/links.ts:31-48`: share links survive their creator's removal from the org.
-- K13 migration `audit_append_only`: trigger blocks UPDATE/DELETE but the app role owns the table (TRUNCATE, DISABLE TRIGGER).
-- K13 `projects/actions.ts`, `share/links.ts`, `invites.ts:48-50`: some audited writes commit apart from their audit row.
-- Tooling: module env keys linger in `.env.example`; drift ignores untracked files (documented, D-19d).
+- ~~K1 `session.ts:82-84`, `link.ts:92-107`: sign-out-everywhere and email change leave unused login links valid; `redeemLink` does not check the email still matches.~~ **Fixed 2026-09-28.** `signOutEverywhere` and `confirmEmailChange` now also mark any unused `login`/`signup` `loginToken` rows for that user as spent, atomically with the session/email change. `redeemLink` itself needs no email check: the invalidation runs in the same transaction as the change, so a link outstanding at that moment either redeems first or finds itself already spent — no separate race to close.
+- ~~K1 `session.ts:13,44`: cookie named `session`, not `__Host-session`; `Secure` derived from `APP_URL`.~~ **Fixed 2026-09-28.** Renamed to `__Host-session`, `Secure` unconditional (browsers treat `http://localhost` as a secure context, so local dev is unaffected).
+- ~~K2 `totp.ts:64-82`: `confirmTotp` skips `assertFresh`; two concurrent confirms can leave 20 recovery codes.~~ **Fixed 2026-09-28.** Added `assertFresh`; the enrolment write is now a conditional `updateMany` claim (`totpEnrolledAt: null`) so a concurrent second confirm loses the row-lock race and returns null instead of also inserting 10 more recovery codes.
+- ~~K5 `src/core/http.ts:4`: first `x-forwarded-for` trusted (safe on Vercel only); IPv6 keyed per address, not /64.~~ **Fixed 2026-09-28** (the /64 part). `clientIp` now keys an IPv6 address on its first 64 bits, so rotating within an ISP-assigned /64 no longer dodges the rate limit. XFF-trust-on-Vercel-only and the shared `'unknown'` bucket when the header is absent are inherent to the single-role, no-reverse-proxy-config deployment model and stay as documented, accepted behavior — not changed.
+- ~~K6 `share/links.ts:31-48`: share links survive their creator's removal from the org.~~ **Fixed 2026-09-28.** `removeMember` now revokes that user's still-active share links in the org, in the same transaction as the membership delete.
+- **K13 migration `audit_append_only`: trigger blocks UPDATE/DELETE but the app role owns the table (TRUNCATE, DISABLE TRIGGER).** Deferred, not fixed. Closing it needs a second, non-owner Postgres role with only INSERT/SELECT on `AuditEvent` — this template has one shared `DATABASE_URL` for migrate and runtime, so that's a real infra change, not a one-file fix. Add it if the audit log ever needs to survive a compromised app role, not just an app bug. (Did not edit the already-applied migration file to add this note — that would change its checksum and trip Prisma's drift check on every existing clone.)
+- ~~K13 `projects/actions.ts`, `share/links.ts`, `invites.ts:48-50`: some audited writes commit apart from their audit row.~~ **Fixed 2026-09-28.** `addProject`, `createShareLink`, `revokeShareLink` and `revokeInvite` now wrap their write and `audit()` call in one `db.$transaction`.
+- Tooling: module env keys linger in `.env.example`; drift ignores untracked files (documented, D-19d). No action — already the accepted, documented behavior.
 
 ## Checked clean (summary)
 

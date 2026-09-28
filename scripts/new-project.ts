@@ -1,4 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
 // Plan §3.1: run once in a fresh clone. `npm run new-project -- <name> <port>`, or answer the prompts.
@@ -6,8 +8,11 @@ import { createInterface } from 'node:readline/promises';
 // started from, and foundation:drift diffs against it.
 const TEMPLATE_PORT = '4100';
 
+// FR-11: a second run corrupts the README banner and leaves scripts on the first port. Once package.json's
+// name is no longer "saas-foundation", this clone has already been through new-project once.
 export function rewrite(files: { pkg: string; playwright: string; ci: string; readme: string }, name: string, port: string, version: string) {
   const pkg = JSON.parse(files.pkg) as { name: string; scripts: Record<string, string> };
+  if (pkg.name !== 'saas-foundation') throw new Error(`package.json name is already "${pkg.name}" — new-project has already run here; a second run corrupts the README banner and stale scripts.`);
   pkg.name = name;
   for (const k of Object.keys(pkg.scripts)) {
     if (k === 'dev:template' || k === 'predev:template') delete pkg.scripts[k];
@@ -21,6 +26,12 @@ export function rewrite(files: { pkg: string; playwright: string; ci: string; re
   };
 }
 
+// FR-11: refuse a port already claimed in the port table, not just the template's own 4100. Best-effort —
+// a port is claimed if its table row's status is "in use" or "reserved"; "free" (the next one to take) is not.
+export function portInUse(claudeMd: string, port: string): boolean {
+  return new RegExp(`\\|\\s*\\*\\*${port}\\*\\*\\s*\\|\\s*(in use|reserved)\\b`).test(claudeMd);
+}
+
 async function main() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const name = process.argv[2] ?? (await rl.question('Project name (kebab-case): ')).trim();
@@ -28,6 +39,12 @@ async function main() {
   rl.close();
   if (!/^[a-z][a-z0-9-]*$/.test(name) || name === 'saas-foundation') throw new Error('Name must be kebab-case and not "saas-foundation".');
   if (!/^\d{4,5}$/.test(port) || port === TEMPLATE_PORT) throw new Error(`Port must be 4-5 digits and not ${TEMPLATE_PORT} (the template's).`);
+  try {
+    const claudeMd = readFileSync(join(homedir(), '.claude', 'CLAUDE.md'), 'utf8');
+    if (portInUse(claudeMd, port)) throw new Error(`Port ${port} is already claimed in ~/.claude/CLAUDE.md's port table. Pick the next free one.`);
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Port ')) throw e; // the claim, not a missing/unreadable file
+  }
 
   const read = (f: string) => readFileSync(f, 'utf8');
   const out = rewrite(

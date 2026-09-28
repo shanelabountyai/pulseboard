@@ -1,3 +1,4 @@
+// public: static legal text
 export const metadata = { title: 'Terms' };
 
 // STUB. Replace with your own terms before launch; this text is not legal advice and covers nothing.

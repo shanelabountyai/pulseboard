@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { MODULES } from './foundation-modules';
@@ -16,13 +17,23 @@ const CLONE_OWNED = /^prisma\/schema\/(?!core\.prisma$|billing\.prisma$|notifica
 
 export type Change = { status: 'A' | 'M' | 'D'; path: string; lines: string[] }; // lines: the +/- lines of a changed file
 
-const markerOf = (l: string) => /\/\/ (\w+)\s*$/.exec(l)?.[1];
+// `// module` in plain files; `{/* module */}` in a .tsx file, where a trailing `//` would render as literal JSX text.
+// `// module` in plain files; `{/* module */}` in a .tsx file, where a trailing `//` would render as literal JSX text.
+const markerOf = (l: string) => /\/\/ (\w+)\s*$/.exec(l)?.[1] ?? /\{\/\* (\w+) \*\/\}\s*$/.exec(l)?.[1];
 
-/** The changes that are real drift. `absent` = modules whose directory is gone; `patched` = paths listed in FOUNDATION_PATCHES.md. */
-export function drift(changes: Change[], absent: Set<string>, patched: (p: string) => boolean): string[] {
+/** Fingerprint of a change's actual diff content, so a patch excuse stops applying once the diff moves on. */
+export const hashOf = (c: Change) => createHash('sha256').update(c.lines.join('\n')).digest('hex').slice(0, 12);
+
+// FOUNDATION_PATCHES.md line format: `path` `hash12` — reason. Reading the hash back (rather than just
+// checking the path is mentioned) is the FR-09 fix: the excuse stops matching once that path's diff moves on.
+export const patchedHash = (patches: string, path: string): string | undefined =>
+  new RegExp('`' + path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '`\\s+`([0-9a-f]{12})`').exec(patches)?.[1];
+
+/** The changes that are real drift. `absent` = modules whose directory is gone; `patched` = a path+hash still listed in FOUNDATION_PATCHES.md. */
+export function drift(changes: Change[], absent: Set<string>, patched: (c: Change) => boolean): string[] {
   const out: string[] = [];
   for (const c of changes) {
-    if (patched(c.path) || CLONE_OWNED.test(c.path)) continue;
+    if (patched(c) || CLONE_OWNED.test(c.path)) continue;
     if (c.status === 'A' && c.path.startsWith('prisma/migrations/')) continue; // a clone's own migrations
     const gone = [...absent].some((m) => MODULES[m]!.some((p) => c.path === p || c.path.startsWith(`${p}/`)));
     if (gone && c.status === 'D') continue; // a deleted module stays deleted
@@ -46,9 +57,8 @@ function collect(base: string): Change[] {
   for (const row of git('diff', '--name-status', '--no-renames', base, '--', ...OWNED.map((p) => (p.includes('*') ? `:(glob)${p}` : `:(literal)${p}`))).split('\n')) {
     const [status, path] = row.split('\t');
     if (!status || !path) continue;
-    const lines = status === 'M'
-      ? git('diff', '-U0', base, '--', `:(literal)${path}`).split('\n').filter((l) => /^[-+]/.test(l) && !/^(---|\+\+\+)/.test(l))
-      : [];
+    // -U0 diff works for A and D too (all + or all - lines), so hashOf() fingerprints the whole change, not just edits.
+    const lines = git('diff', '-U0', base, '--', `:(literal)${path}`).split('\n').filter((l) => /^[-+]/.test(l) && !/^(---|\+\+\+)/.test(l));
     changes.push({ status: status as Change['status'], path, lines });
   }
   return changes; // ponytail: untracked files are not in `git diff`; commit or `git add -N` before checking
@@ -63,9 +73,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   const absent = new Set(Object.keys(MODULES).filter((m) => !existsSync(MODULES[m]![0]!)));
   const patches = existsSync('FOUNDATION_PATCHES.md') ? readFileSync('FOUNDATION_PATCHES.md', 'utf8') : '';
-  const bad = drift(collect(base), absent, (p) => patches.includes(p));
+  const changes = collect(base);
+  const bad = drift(changes, absent, (c) => patchedHash(patches, c.path) === hashOf(c));
   if (bad.length) {
-    console.error(`foundation:drift: template-owned files differ from ${base}:\n  ${bad.join('\n  ')}\nMove the change upstream, or list the path and a reason in FOUNDATION_PATCHES.md.`);
+    const byPath = new Map(changes.map((c) => [c.path, c]));
+    const detail = bad.map((b) => {
+      const c = byPath.get(b.slice(2))!;
+      const hash = hashOf(c);
+      const stale = patchedHash(patches, c.path);
+      return stale
+        ? `  ${b}\n    FOUNDATION_PATCHES.md is stale here (excused ${stale}, now ${hash}) — update the hash`
+        : `  ${b}\n    add: \`${c.path}\` \`${hash}\` — <reason>`;
+    });
+    console.error(`foundation:drift: template-owned files differ from ${base}:\n${detail.join('\n')}\nMove the change upstream, or list the path and hash in FOUNDATION_PATCHES.md.`);
     process.exit(1);
   }
   console.log(`foundation:drift: clean against ${base}${absent.size ? ` (modules removed: ${[...absent].join(', ')})` : ''}`);

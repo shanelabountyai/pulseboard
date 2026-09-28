@@ -1,3 +1,4 @@
+// public: 404s unless DEMO_MODE, same-origin only (INV-27)
 import { demoEnabled, demoSignIn } from '@/core/auth/demo';
 import { setSessionCookie } from '@/core/auth/session';
 import { isSameOrigin } from '@/core/http';

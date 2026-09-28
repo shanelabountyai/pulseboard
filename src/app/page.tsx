@@ -1,3 +1,4 @@
+// public: the landing page
 import Link from 'next/link';
 import { demoEnabled } from '@/core/auth/demo';
 

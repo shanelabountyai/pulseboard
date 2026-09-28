@@ -2,6 +2,70 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
+## 1.2.0 (2026-09-28)
+
+F-03: a clone can now declare a module required in the clone-owned `src/app/required-modules.ts`. `foundation:check-modules`
+leaves a required module in place and still removes the rest, instead of always removing both — callboard imports
+`notifications` outside the marked lines (`src/lib/messages.ts`, `src/lib/broadcast.ts`, `/api/sms/inbound`, the event
+actions), so its `modules-removed` CI job has failed `tsc` since 2026-09-26. Verified for real: `check-modules` with
+`notifications` required passes with only billing removed, and with no module required it still removes both, unchanged.
+
+## 1.1.1 (2026-09-28)
+
+security: (LOW K1) `signOutEverywhere` and `confirmEmailChange` left any unused `login`/`signup` link for that user valid — a
+stolen link outlived the session boundary meant to close it. Both now also spend that user's unused `loginToken` rows,
+atomically with the session/email change.
+
+security: (LOW K1) The session cookie was named `session` with `Secure` derived from `APP_URL`, instead of the browser-enforced
+`__Host-session` prefix. Renamed; `Secure` is now unconditional (`http://localhost` is treated as a secure context, so local
+dev is unaffected).
+
+security: (LOW K2) `confirmTotp` skipped `assertFresh`, and its enrolment write was not exclusive: two concurrent confirms
+could both succeed and leave 20 recovery codes instead of 10, with only one meant to have won. Added `assertFresh`, and the
+write is now a conditional `updateMany` claim on `totpEnrolledAt: null` so the loser gets `null` back.
+
+security: (LOW K5) An IPv6 rate-limit key was scoped to the exact address, so a client rotating within its ISP-assigned /64
+dodged the limit on every request. `clientIp` now keys on the first 64 bits.
+
+security: (LOW K6) A share link survived its creator's removal from the org. `removeMember` now revokes that user's active
+share links in the org, in the same transaction as the membership delete.
+
+security: (LOW K13) `addProject`, `createShareLink`, `revokeShareLink` and `revokeInvite` wrote their row and their audit
+event as two separate commits, so a crash between them left an unaudited write. All four now wrap the write and the `audit()`
+call in one `db.$transaction`.
+
+Upgrade: no schema or config change. Any code that read `SESSION_COOKIE` (`'session'`) directly instead of importing the
+constant needs the new value, `'__Host-session'`.
+
+## 1.1.0 (2026-09-28)
+
+security: (FR-06, K3, rule 1) Nothing checked that pages, layouts and route handlers guard themselves; a clone's new page could
+ship unguarded, and a client-side navigation does not re-run the layout's guard. `unguardedEntrypoints()` now requires every
+exported handler in `src/app/**/{page,layout,template,default,route}` to make `requireUser`/`requireOrg` its first `await`, or
+the file to carry a `// public: <reason>` line. The 14 public files are marked.
+
+security: (FR-07, K3) The action harness globbed only `src/{app,modules}`, and could not see inline `'use server'` functions,
+which Next also registers as endpoints. It now globs all of `src/`, and any `'use server'` that is not a file's first directive fails.
+
+security: (FR-08, K4) An id typed `z.string()`/`z.cuid()` was filled with `'x'`, so INV-02/03/04 silently skipped that action.
+`generate()` now throws on an untagged field whose name looks like an id (`id`, `…Id(s)`, `slug`, `token`) or whose format is an
+id format; wrap a non-row-id in the new `notRef()` (the two emailed-token fields are).
+
+Upgrade: add `// public: <reason>` to any clone page/route that is deliberately unguarded, move inline server actions into an
+actions file, and tag id fields `ref('<model>')` (or `notRef()`). The failing test names each file or field.
+
+Fix (FR-09, tooling): a path listed once in `FOUNDATION_PATCHES.md` was excused from drift forever, whatever later edits it
+got. Each entry now carries a hash of the excused diff (`` `path` `hash` — reason ``); `foundation:drift` fails again once
+that path's diff moves on, and its error message prints the `` `path` `hash` `` to paste in.
+
+Fix (FR-10, tooling): module removal stripped the `// <module>` lines in `core.prisma` and `cron-jobs.ts` but not the Billing
+nav link in `src/app/o/[org]/layout.tsx` (a JSX file, where a trailing `//` renders as literal text — it now carries
+`{/* billing */}`). `layout.tsx` is in `MARKED_FILES`; `foundation:check-modules` confirms the route is gone after removal.
+
+Fix (FR-11, tooling): `new-project` checked a port only against the template's own 4100, not the port table, and a second run
+silently corrupted the README banner and left scripts on the first port. It now refuses a port already `in use` or `reserved`
+in `~/.claude/CLAUDE.md`'s port table, and refuses to run once `package.json`'s name is no longer `saas-foundation`.
+
 ## 1.0.3 (2026-09-27)
 
 security: (FR-02, K2) A session waiting on TOTP lived 30 days, and the only guess control was 8 tries per 5 minutes: over one session,

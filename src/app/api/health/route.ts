@@ -1,3 +1,4 @@
+// public: returns ok/503 only
 import { db } from '@/core/db';
 import { log } from '@/core/log';
 
