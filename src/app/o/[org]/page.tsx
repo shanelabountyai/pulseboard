@@ -25,12 +25,15 @@ function Fresh({ at, current }: { at: Date | null; current: Date }) {
 
 // Trend: one y axis from zero to a nice ceiling, 3 gridlines, 4-6 x-axis dates, a direct-labeled
 // endpoint, and native <title> tooltips per day (TrendChart component, D-020).
-function Trend({ points }: { points: { day: string; count: number }[] }) {
+// `count: null` means the day is past the rollup watermark — never rolled up, not "zero activity" — so it's
+// left out of the line/area and the endpoint, not drawn as a plunge to 0 (found in agent review, 2026-09-28).
+function Trend({ points }: { points: { day: string; count: number | null }[] }) {
   const W = 720, H = 220, L = 48, R = 56, T = 12, B = 28;
+  const plotted = points.map((p, i) => ({ ...p, i })).filter((p): p is { day: string; count: number; i: number } => p.count !== null);
   // A nice step (1/2/5 x 10^n) off a third of the max, so the 3 gridlines are round numbers
   // instead of repeating decimals (mx/3 of an arbitrary ceiling produces e.g. 6.666666666666667k,
   // which is both ugly and wide enough to overflow the page's left edge).
-  const rawMax = Math.max(1, ...points.map((p) => p.count));
+  const rawMax = Math.max(1, ...plotted.map((p) => p.count));
   const stepMag = 10 ** Math.floor(Math.log10(Math.max(rawMax / 3, 1)));
   const stepNorm = rawMax / 3 / stepMag;
   const step = (stepNorm <= 1 ? 1 : stepNorm <= 2 ? 2 : stepNorm <= 5 ? 5 : 10) * stepMag;
@@ -39,13 +42,13 @@ function Trend({ points }: { points: { day: string; count: number }[] }) {
   const x = (i: number) => L + (W - L - R) * (n < 2 ? 0 : i / (n - 1));
   const y = (v: number) => T + (H - T - B) * (1 - v / mx);
   const fmtY = (v: number) => (v >= 1000 ? `${+(v / 1000).toFixed(1)}k` : `${v}`);
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.count).toFixed(1)}`).join('');
-  const area = n ? `${line} L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z` : '';
+  const line = plotted.map((p, j) => `${j ? 'L' : 'M'}${x(p.i).toFixed(1)},${y(p.count).toFixed(1)}`).join('');
+  const area = plotted.length ? `${line} L${x(plotted.at(-1)!.i).toFixed(1)},${y(0).toFixed(1)} L${x(plotted[0]!.i).toFixed(1)},${y(0).toFixed(1)} Z` : '';
   const longRange = n > 180;
   const tickCount = Math.min(6, Math.max(4, n > 0 ? n : 4));
   const tickIdx = n > 1 ? Array.from({ length: tickCount }, (_, k) => Math.round((k * (n - 1)) / (tickCount - 1))) : [];
   const uniqTicks = [...new Set(tickIdx)];
-  const last = points[n - 1];
+  const last = plotted.at(-1);
   return (
     <svg className="pb-trend" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily count, ${n} days, latest ${last ? last.count.toLocaleString() : 0}`}>
       {[step, step * 2, step * 3].map((v) => (
@@ -61,15 +64,15 @@ function Trend({ points }: { points: { day: string; count: number }[] }) {
           {utcDate(new Date(`${points[i]!.day}T00:00:00Z`), longRange ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
         </text>
       ))}
-      {n > 0 && <path className="area" d={area} />}
-      {n > 0 && <path className="line" d={line} />}
+      {plotted.length > 0 && <path className="area" d={area} />}
+      {plotted.length > 0 && <path className="line" d={line} />}
       {points.map((p, i) => (
         <rect key={p.day} className="hit" x={x(i) - (W / Math.max(n, 1)) / 2} y={T} width={W / Math.max(n, 1)} height={H - T - B}>
-          <title>{`${p.day}: ${p.count.toLocaleString()}`}</title>
+          <title>{p.count === null ? `${p.day}: not yet rolled up` : `${p.day}: ${p.count.toLocaleString()}`}</title>
         </rect>
       ))}
-      {last && <circle className="end" cx={x(n - 1)} cy={y(last.count)} r="4" />}
-      {last && <text className="end-label" x={x(n - 1) + 8} y={y(last.count) + 4}>{last.count.toLocaleString()}</text>}
+      {last && <circle className="end" cx={x(last.i)} cy={y(last.count)} r="4" />}
+      {last && <text className="end-label" x={x(last.i) + 8} y={y(last.count) + 4}>{last.count.toLocaleString()}</text>}
     </svg>
   );
 }
@@ -92,9 +95,9 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const asOf = await dataAsOf(ctx.orgId);
   const [points, steps, cohorts] = valid && eventName
     ? await Promise.all([
-        trend(ctx.orgId, { eventName, from, to, ...filter }),
+        trend(ctx.orgId, { eventName, from, to, ...filter, asOf: asOf ?? undefined }),
         funnel(ctx.orgId, { steps: FUNNEL, from, to, windowMs: FUNNEL_WINDOW_MS }),
-        retention(ctx.orgId, { from, to }),
+        retention(ctx.orgId, { from, to, asOf: asOf ?? undefined }),
       ])
     : [[], [], []];
 

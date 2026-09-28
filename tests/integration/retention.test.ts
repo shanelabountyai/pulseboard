@@ -60,6 +60,12 @@ describe('retention cohorts (hand-computed)', () => {
     ]);
   });
 
+  it('asOf, not the wall clock, decides which periods are null (a stale rollup must not read as zero return)', async () => {
+    // asOf = W(3): only W0's k1-k3 (weeks W1-W3) have occurred as of that watermark; k4-k8 are unmeasured, not zero.
+    const rows = await retention(orgId, { ...range, asOf: new Date(W(3, 0)) });
+    expect(rows.find((r) => r.week === iso(0))!.returned).toEqual([3, 1, 1, null, null, null, null, null]);
+  });
+
   it('a specific return event: only purchase counts as a return; cohorts stay first-seen on any event', async () => {
     expect(await retention(orgId, { ...range, returnEvent: 'purchase' })).toEqual([
       { week: iso(0), size: 5, returned: [1, 0, 0, 0, 0, 0, 0, 0] }, // r1's W1 purchase

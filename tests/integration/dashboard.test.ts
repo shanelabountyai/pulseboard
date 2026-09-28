@@ -32,6 +32,14 @@ describe('dashboard reads', () => {
     expect((await filterOptions(orgId)).eventNames).toEqual(['view']);
   });
 
+  it('trend nulls days after asOf (never rolled up) instead of reading them as zero', async () => {
+    await ingest(orgId, [ev('u1', '2026-09-01')]);
+    await runRollupsForOrg(orgId);
+    const q = { eventName: 'view', from: d('2026-09-01'), to: d('2026-09-05'), asOf: d('2026-09-02') };
+    // 09-01 measured (1), 09-02 is asOf's own day and still measured (0, a real gap), 09-03/09-04 never rolled up.
+    expect((await trend(orgId, q)).map((p) => p.count)).toEqual([1, 0, null, null]);
+  });
+
   it('dataAsOf is null before the first rollup and the watermark time after', async () => {
     expect(await dataAsOf(orgId)).toBeNull();
     await ingest(orgId, [ev('u1', '2026-09-01')]);

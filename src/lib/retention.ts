@@ -4,17 +4,19 @@ import { now } from '@/core/clock';
 export const PERIODS = 8;
 const WEEK = 7 * 86_400_000;
 
-export type RetentionQuery = { from: Date; to: Date; returnEvent?: string };
+export type RetentionQuery = { from: Date; to: Date; returnEvent?: string; asOf?: Date };
 export type Cohort = { week: string; size: number; returned: (number | null)[] };
 
 /**
  * Weekly retention from `RollupUserDay` (reads come from rollups; D-015). A user's cohort is the UTC Monday-start
  * week of their first event ever, over all time, not the query range, so membership only moves when a late
  * event with an earlier timestamp arrives. `returned[k-1]` counts cohort users active in week W+k (k = 1…8) on
- * any event, or on `returnEvent` only; weeks that have not started yet are null. Cohorts whose week starts in
- * [from, to) are returned; weeks with no new users are omitted.
+ * any event, or on `returnEvent` only; weeks not yet covered by `asOf` (the rollup watermark, default now) are
+ * null rather than 0 — a week that just hasn't been rolled up yet isn't the same as one with zero returns.
+ * Cohorts whose week starts in [from, to) are returned; weeks with no new users are omitted.
  */
 export async function retention(orgId: string, q: RetentionQuery): Promise<Cohort[]> {
+  const asOf = q.asOf ?? now();
   const rows = await db.$queryRaw<{ week: string; k: number; n: number }[]>`
     WITH cohort AS (
       SELECT "userId", date_trunc('week', min("day"))::date AS w FROM "RollupUserDay"
@@ -39,7 +41,7 @@ export async function retention(orgId: string, q: RetentionQuery): Promise<Cohor
   for (const r of rows) {
     if (r.k === 0) {
       const start = Date.parse(r.week);
-      out.push({ week: r.week, size: r.n, returned: Array.from({ length: PERIODS }, (_, i) => (start + (i + 1) * WEEK > now().getTime() ? null : 0)) });
+      out.push({ week: r.week, size: r.n, returned: Array.from({ length: PERIODS }, (_, i) => (start + (i + 1) * WEEK > asOf.getTime() ? null : 0)) });
     } else out.at(-1)!.returned[r.k - 1] = r.n;
   }
   return out;

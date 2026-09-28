@@ -3,10 +3,14 @@ import { db } from '@/core/db';
 const DAY = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-export type TrendQuery = { eventName: string; from: Date; to: Date; prop?: string; value?: string };
-export type TrendPoint = { day: string; count: number };
+export type TrendQuery = { eventName: string; from: Date; to: Date; prop?: string; value?: string; asOf?: Date };
+export type TrendPoint = { day: string; count: number | null };
 
-/** Daily counts from rollups only. With a property filter it reads `RollupDailyProp`, else `RollupDaily`. Gap days are 0. */
+/**
+ * Daily counts from rollups only. With a property filter it reads `RollupDailyProp`, else `RollupDaily`.
+ * A day with events but zero of this one is a real gap (0). A day after `asOf` (the rollup watermark) was
+ * never rolled up at all and is `null` — plotting it as 0 reads as "traffic stopped," which it didn't.
+ */
 export async function trend(orgId: string, q: TrendQuery): Promise<TrendPoint[]> {
   const rows = q.prop
     ? await db.$queryRaw<{ day: string; n: number }[]>`
@@ -18,8 +22,12 @@ export async function trend(orgId: string, q: TrendQuery): Promise<TrendPoint[]>
         WHERE "orgId" = ${orgId}::uuid AND "eventName" = ${q.eventName}
           AND "day" >= ${q.from}::date AND "day" < ${q.to}::date`;
   const byDay = new Map(rows.map((r) => [r.day, r.n]));
+  const cutoff = q.asOf ? iso(q.asOf) : null;
   const out: TrendPoint[] = [];
-  for (let t = q.from.getTime(); t < q.to.getTime(); t += DAY) out.push({ day: iso(new Date(t)), count: byDay.get(iso(new Date(t))) ?? 0 });
+  for (let t = q.from.getTime(); t < q.to.getTime(); t += DAY) {
+    const day = iso(new Date(t));
+    out.push({ day, count: cutoff && day > cutoff ? null : (byDay.get(day) ?? 0) });
+  }
   return out;
 }
 
