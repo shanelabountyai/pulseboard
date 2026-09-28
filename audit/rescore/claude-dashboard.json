@@ -1,0 +1,16 @@
+{
+"K1":{"s":"N/A","text":"No sessions or accounts; single-user local tool with no auth system.","evidence":"server.js:1-261"},
+"K2":{"s":"N/A","text":"No users or privileged roles exist.","evidence":"package.json (express only)"},
+"K3":{"s":"✗","text":"Swept all 10 routes: none has any auth check, including GET /api/skills/run and /api/agents/run which spawn the claude CLI; SEC-01 (fixed a009fce) narrows exposure to loopback only, so any local process or a cross-site browser GET can still reach them, and the optional token check was deliberately not done.","evidence":"server.js:22,30,43,72,154,163,179,189,217,249; server.js:259"},
+"K4":{"s":"N/A","text":"No tenants or owners. Note: projectPath query param on /api/agents/run is not validated against configured paths (swept, SEC-02 covered by loopback bind only).","evidence":"server.js:189-211; lib/config.js:39-51"},
+"K5":{"s":"N/A","text":"No public unauthenticated write surface; loopback-only after SEC-01.","evidence":"server.js:259"},
+"K6":{"s":"N/A","text":"No capability/token links exist.","evidence":"server.js (no token routes)"},
+"K7":{"s":"N/A","text":"Local loopback tool, no security headers set and none required by its trusted-machine model.","evidence":"server.js:15-16"},
+"K8":{"s":"✗","text":"Spawned claude process inherits full process.env (every shell secret) with a caller-supplied prompt; no tracked secrets, no VITE/NEXT_PUBLIC vars, config.json is gitignored.","evidence":"lib/runner.js:34; .gitignore:2"},
+"K9":{"s":"N/A","text":"No webhooks.","evidence":"server.js routes list"},
+"K10":{"s":"?","text":"Logging is only a startup line, but several catch blocks return raw err.message to the client and it was not deeply reviewed; low risk on loopback.","evidence":"server.js:26,260; lib/runner.js:40"},
+"K11":{"s":"N/A","text":"Only env var is PORT with inline default; no .env files.","evidence":"server.js:12"},
+"K12":{"s":"N/A","text":"No database and no test suite.","evidence":"package.json"},
+"K13":{"s":"N/A","text":"No privileged changes to audit; single user.","evidence":"server.js"},
+"K14":{"s":"✔","text":"Own fixed port 4173 in config default matching the port table; no Vercel deploy so ignoreCommand and cron routes do not apply.","evidence":"server.js:12"}
+}

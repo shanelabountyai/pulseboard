@@ -21,6 +21,7 @@ async function resend(msg: Email, e: typeof env) {
   if (!e.RESEND_API_KEY || !e.EMAIL_FROM) throw new Error('Email provider is not configured');
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000), // a hung provider must not hold a request or an outbox lease
     headers: { Authorization: `Bearer ${e.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: e.EMAIL_FROM, to: msg.to, subject: msg.subject, text: msg.body }),
   });

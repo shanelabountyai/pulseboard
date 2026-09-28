@@ -32,6 +32,7 @@ describe('INV-13 email transport', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
     await sendEmail(msg, { ...env, VERCEL_ENV: 'preview', EMAIL_SANDBOX_TO: 'me@example.test', RESEND_API_KEY: 'k', EMAIL_FROM: 'a@b.c' });
     expect(JSON.parse(String(fetchSpy.mock.calls[0]![1]!.body)).to).toBe('me@example.test');
+    expect(fetchSpy.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal); // FR-01: a hung provider times out
   });
 
   it('production with no provider fails at boot', () => {

@@ -102,3 +102,6 @@ Upgrade steps and versioning rules: `IMPLEMENTATION_PLAN.md` §3.3.
 
 Legal pages are stubs (`/legal/privacy`, `/legal/terms`) and are not legal advice. There is no audit-log viewer and no
 `/o/[org]/settings/security` page yet.
+
+No cookie banner: the foundation sets only strictly necessary cookies (`session`, `totp_pending`), and those need no consent.
+If you add analytics, ads or any other non-essential tracker, you need consent first (spec D-20).

@@ -17,42 +17,47 @@ export async function enqueue(m: Enqueue, tx: Pick<typeof db, 'outbox'> = db) {
   return tx.outbox.create({ data: { ...m, data: (m.data ?? {}) as Prisma.InputJsonObject }, select: { id: true } });
 }
 
+/** How long a claimed row stays invisible to other drains; must outlast the transports' 15s fetch timeout. */
+export const LEASE_MS = 2 * 60_000;
+
 /**
- * Sends due messages. Each row is claimed with FOR UPDATE SKIP LOCKED inside a transaction that
- * also does the send and the bookkeeping, so two overlapping drains never take the same row.
- * Delivery is at-least-once: a crash between the provider accepting and the commit sends it again.
- * A failure backs the row off; after MAX_ATTEMPTS it stays unsent with `lastError` for a human.
+ * Sends due messages. Each row is claimed in a short transaction (FOR UPDATE SKIP LOCKED) that counts
+ * the attempt and leases the row by pushing `sendAfter` out, so overlapping drains never take it.
+ * The send runs outside any transaction (FR-01: a send slower than the 5s tx timeout was delivered
+ * but never recorded, then re-sent every run). Delivery is at-least-once: a crash after the provider
+ * accepts sends it again once the lease runs out. A failure backs the row off; after MAX_ATTEMPTS it
+ * stays unsent with `lastError` for a human.
  */
 export async function drainOutbox(limit = 25): Promise<{ sent: number; failed: number }> {
   let sent = 0;
   let failed = 0;
   for (let i = 0; i < limit; i++) {
-    const outcome = await db.$transaction(async (tx) => {
-      const [row] = await tx.$queryRaw<{ id: string; channel: string; to: string; template: string; data: unknown; attempts: number }[]>`
+    const row = await db.$transaction(async (tx) => {
+      const [r] = await tx.$queryRaw<{ id: string; channel: string; to: string; template: string; data: unknown; attempts: number }[]>`
         SELECT id, channel, "to", template, data, attempts FROM "Outbox"
         WHERE "sentAt" IS NULL AND "sendAfter" <= ${now()} AND attempts < ${MAX_ATTEMPTS}
         ORDER BY "sendAfter" LIMIT 1 FOR UPDATE SKIP LOCKED`;
-      if (!row) return null;
-      try {
-        const { subject, body } = render(row.template, row.data);
-        if (row.channel === 'sms') await sendSms({ to: row.to, body });
-        else await sendEmail({ to: row.to, subject, body });
-        await tx.outbox.update({ where: { id: row.id }, data: { sentAt: now(), attempts: { increment: 1 }, lastError: null } });
-        return 'sent';
-      } catch (err) {
-        const attempts = row.attempts + 1;
-        // Error text can echo provider detail but never our body or address: sendEmail/sendSms throw status-only messages.
-        await tx.outbox.update({
-          where: { id: row.id },
-          data: { attempts, lastError: (err instanceof Error ? err.message : String(err)).slice(0, 500), sendAfter: new Date(now().getTime() + (BACKOFF_MS[attempts - 1] ?? BACKOFF_MS.at(-1)!)) },
-        });
-        log('outbox.failed', { id: row.id, attempts });
-        return 'failed';
-      }
+      if (r) await tx.outbox.update({ where: { id: r.id }, data: { attempts: { increment: 1 }, sendAfter: new Date(now().getTime() + LEASE_MS) } });
+      return r;
     });
-    if (!outcome) break;
-    if (outcome === 'sent') sent++;
-    else failed++;
+    if (!row) break;
+    const attempts = row.attempts + 1;
+    try {
+      const { subject, body } = render(row.template, row.data);
+      if (row.channel === 'sms') await sendSms({ to: row.to, body });
+      else await sendEmail({ to: row.to, subject, body });
+    } catch (err) {
+      // Error text can echo provider detail but never our body or address: sendEmail/sendSms throw status-only messages.
+      await db.outbox.update({
+        where: { id: row.id },
+        data: { lastError: (err instanceof Error ? err.message : String(err)).slice(0, 500), sendAfter: new Date(now().getTime() + (BACKOFF_MS[attempts - 1] ?? BACKOFF_MS.at(-1)!)) },
+      });
+      log('outbox.failed', { id: row.id, attempts });
+      failed++;
+      continue;
+    }
+    await db.outbox.update({ where: { id: row.id }, data: { sentAt: now(), lastError: null } });
+    sent++;
   }
   return { sent, failed };
 }

@@ -1,0 +1,72 @@
+{
+ "K1": {
+  "s": "✗",
+  "text": "Auth.js DB sessions are server-side revocable, but the adapter stores the session token raw and the magic link is consumed by GET callback; unchanged since baseline, no fix landed.",
+  "evidence": "src/auth.ts:9-26"
+ },
+ "K2": {
+  "s": "N/A",
+  "text": "No admin/owner role exists (single-practitioner users only; intake owner is an env-designated email, not a privileged role), so no privileged user to require MFA for.",
+  "evidence": "src/db/schema.ts; src/app/api/intake/route.ts:82-84"
+ },
+ "K3": {
+  "s": "✔",
+  "text": "Full sweep of all 15 route handlers plus studio page: every private handler calls auth() and returns 401; /studio/* also gated in middleware; only 'use server' exports are sign-in/out in page.tsx; public exceptions are intake (keyed/limited), /s/[token] (capability) and worker (CRON bearer).",
+  "evidence": "src/middleware.ts:29-52; src/app/api/**/route.ts; src/app/page.tsx:16-29"
+ },
+ "K4": {
+  "s": "✔",
+  "text": "Full sweep: use-cases by (id,userId), kickoff jobs via getOwnedJob/userId-scoped approve/feedback/exports, share-links joined to useCases.userId, kickoff POST scoped by caseId+userId; share page reads by token then link.useCaseId (capability, not caller scope).",
+  "evidence": "src/app/api/use-cases/[id]/route.ts:10-44; src/app/api/kickoff/route.ts:18-36; src/app/api/share-links/[token]/route.ts:15-20; src/lib/kickoff/worker.ts:174-181"
+ },
+ "K5": {
+  "s": "✗",
+  "text": "Rate limits are per-instance in-memory Maps in middleware and the intake route, not a shared store (SEC-03); sign-in has none.",
+  "evidence": "src/middleware.ts:4-27; src/app/api/intake/route.ts"
+ },
+ "K6": {
+  "s": "✗",
+  "text": "Share tokens are the raw primary key with no expiry column; revocable via revoked flag, allowlisted projection and no-referrer/noindex/no-store are in place (SEC-02).",
+  "evidence": "src/db/schema.ts:98-103; src/lib/sharing.ts:32-45; next.config.mjs:6-18"
+ },
+ "K7": {
+  "s": "✗",
+  "text": "Security headers only set on /s/:token*; no global Referrer-Policy, nosniff, X-Frame-Options/frame-ancestors or HSTS.",
+  "evidence": "next.config.mjs:4-19"
+ },
+ "K8": {
+  "s": "✗",
+  "text": "INTAKE_KEY gate is skipped when unset (fails open) and compared with !== from the request body (SEC-01); CRON_SECRET fails closed but uses !== (SEC-04).",
+  "evidence": "src/app/api/intake/route.ts:76-80; src/app/api/kickoff/worker/route.ts:17-19"
+ },
+ "K9": {
+  "s": "N/A",
+  "text": "No inbound webhooks; the only external callback is the Vercel cron worker.",
+  "evidence": "src/app/api"
+ },
+ "K10": {
+  "s": "✗",
+  "text": "No tokens or bodies logged, but the intake notify email silently returns false when AUTH_RESEND_KEY is unset and there is no production fail-loud on missing provider.",
+  "evidence": "src/lib/notify.ts:64-77; src/lib/kickoff/worker.ts:94,128"
+ },
+ "K11": {
+  "s": "✗",
+  "text": "No schema-validated env at boot (db uses DATABASE_URL!), and .env.example omits INTAKE_KEY, INTAKE_OWNER_EMAIL, CRON_SECRET, ANTHROPIC_API_KEY, KICKOFF_* (SEC-05).",
+  "evidence": "src/db/index.ts:5; .env.example"
+ },
+ "K12": {
+  "s": "✗",
+  "text": "Integration tests and CI e2e run against a Neon branch, no code-level guard refusing cloud URLs; e2e does use build+start (production build) but on port 3000.",
+  "evidence": "vitest.integration.config.ts:4-16; .github/workflows/ci.yml:65-106; playwright.config.ts:21-27"
+ },
+ "K13": {
+  "s": "N/A",
+  "text": "No privileged/admin role or privileged-change surface exists; user-level CRUD and plan approvals only, so no privileged audit log applies.",
+  "evidence": "src/db/schema.ts"
+ },
+ "K14": {
+  "s": "✗",
+  "text": "No ignoreCommand in vercel.json, port 3000 (collides with storage) not set in package.json (OPS-01), and cron worker compare is not constant-time (fails closed though).",
+  "evidence": "vercel.json; package.json:5-8; src/app/api/kickoff/worker/route.ts:17-19"
+ }
+}

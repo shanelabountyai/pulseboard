@@ -18,6 +18,7 @@ async function twilio(msg: { to: string; body: string }, e: typeof env) {
   if (!e.TWILIO_ACCOUNT_SID || !e.TWILIO_AUTH_TOKEN || !e.TWILIO_FROM) throw new Error('SMS provider is not configured');
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${e.TWILIO_ACCOUNT_SID}/Messages.json`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000), // a hung provider must not hold a request or an outbox lease
     headers: {
       Authorization: `Basic ${Buffer.from(`${e.TWILIO_ACCOUNT_SID}:${e.TWILIO_AUTH_TOKEN}`).toString('base64')}`,
       'Content-Type': 'application/x-www-form-urlencoded',

@@ -1,0 +1,72 @@
+{
+ "K1": {
+  "s": "✗",
+  "text": "No users or sessions exist; only a shared HTTP Basic demo password in proxy.ts (D-032), which is not a revocable session (SEC-01 open).",
+  "evidence": "proxy.ts:5-16; src/demo-gate.ts:12-19"
+ },
+ "K2": {
+  "s": "✗",
+  "text": "No users or roles, so no MFA (SEC-01 open).",
+  "evidence": "src/demo-gate.ts:6-9"
+ },
+ "K3": {
+  "s": "✗",
+  "text": "proxy.ts puts one shared password in front of every route incl. server actions, file routes and portals, but there is no per-entry-point guard or identity across the 18 'use server' page files (SEC-01 open); swept via the matcher, not per action.",
+  "evidence": "proxy.ts:19-21; docs/decisions.md:875-884; docs/backlog.md:86"
+ },
+ "K4": {
+  "s": "✗",
+  "text": "Function-signature sweep: updateLine(lineId), addThreshold/reserve(blockId), decide(thresholdId), advance/revert(speakerId), approve/override(versionId), setQuantity(itemId), enterQuote/award/advanceContract and recordDoc(vendorId) still take a bare id with no eventId (SEC-02 open); only callsheet/portal and grid are scoped.",
+  "evidence": "src/budget/budget.ts:45; src/attrition/attrition.ts:194,216,260; src/bureau/bureau.ts:85,102; src/content/lock.ts:29,46; src/rfp/rfp.ts:122,136,176,202; src/budget/compliance.ts:28; src/callsheet/portal.ts:22"
+ },
+ "K5": {
+  "s": "✗",
+  "text": "No rate limiter anywhere (grep found none); the shared password is the only brake on portal uploads (SEC-07 open).",
+  "evidence": "docs/decisions.md:881-883; next.config.ts:8"
+ },
+ "K6": {
+  "s": "✔",
+  "text": "Portal tokens are SHA-256 hashed, reissue revokes, links expire after the event plus grace (linkLive), and /portal/* sends no-store, no-referrer and noindex (SEC-04/05 fixed); allowlisted projection not fully verified (spot-checked).",
+  "evidence": "src/portal.ts:13,20; next.config.ts:9-17; src/content/pipeline.ts:25,52; docs/backlog.md:89-90"
+ },
+ "K7": {
+  "s": "✗",
+  "text": "Headers are set only for /portal/*; no global Referrer-Policy, nosniff, frame-ancestors or HSTS (SEC-06 open).",
+  "evidence": "next.config.ts:9-17; docs/backlog.md:91"
+ },
+ "K8": {
+  "s": "✔",
+  "text": "Demo password and CRON_SECRET compare constant-time or fail closed, the portal token no longer goes in the query string (SEC-04 fixed), no NEXT_PUBLIC_ vars, only .env.example tracked (as of baseline).",
+  "evidence": "src/demo-gate.ts:14-19; docs/backlog.md:89"
+ },
+ "K9": {
+  "s": "N/A",
+  "text": "No webhooks.",
+  "evidence": ""
+ },
+ "K10": {
+  "s": "N/A",
+  "text": "No outbound provider; reminders and nags go to DB outboxes and no console logging was found in app/ or src/.",
+  "evidence": "src/chase/chase.ts; src/budget/compliance.ts"
+ },
+ "K11": {
+  "s": "✗",
+  "text": "No env schema; .env.example lists only DATABASE_URL and SHADOW_DATABASE_URL, missing DEMO_ACCESS_PASSWORD, CRON_SECRET and SHOWCALL_ALLOW_CLOUD_DB (OPS-02 open).",
+  "evidence": ".env.example:1-3; src/db.ts:4-9; src/demo-gate.ts:14; app/api/cron/escalate/route.ts:10"
+ },
+ "K12": {
+  "s": "✔",
+  "text": "db.ts and prisma.config.ts refuse cloud DB URLs unless SHOWCALL_ALLOW_CLOUD_DB is typed, and e2e runs against a production build on :4000 with .env.test.",
+  "evidence": "src/db.ts:7-10; playwright.config.ts:16-21"
+ },
+ "K13": {
+  "s": "✔",
+  "text": "DB triggers block UPDATE/DELETE on the history tables (per baseline, not re-read); no verified actor since no auth exists.",
+  "evidence": "prisma/migrations/*/migration.sql"
+ },
+ "K14": {
+  "s": "✗",
+  "text": "ignoreCommand is canonical and port 4000 is in config, but the cron route compares the bearer secret with === instead of a constant-time compare (it does fail closed in production).",
+  "evidence": "vercel.json:4; app/api/cron/escalate/route.ts:10-11; package.json"
+ }
+}
