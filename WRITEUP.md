@@ -198,6 +198,25 @@ a browser, not just asserted against in a test:
 Both fixes were pushed back into the published design-system artifact, not just patched
 locally, so the next consumer of either component doesn't hit them fresh.
 
+**Defects found by persona review (2026-09-28).** Three AI role-play reviewers (a Director of
+Marketing Analytics, a CMO and a VP of Marketing, each an Opus subagent given only a screenshot and
+the spec, not each other's notes) independently flagged the same things:
+- **"Not rolled up yet" rendered as zero.** A range past the rollup watermark drew the trend line
+  plunging to 0, and unstarted-in-data retention weeks showed 0%. Both are correct arithmetic and
+  wrong communication. `trend()` and `retention()` now take `asOf` (the watermark): days after it are
+  `null` and drawn as a gap; retention periods not covered by it are blank. A day that was rolled up
+  with no events still draws as 0. Tests pin both branches.
+- **The seed flattered the product.** `seed-generate.ts` scheduled each user's activity by weeks
+  since their own signup, while retention (correctly, D-018) buckets by UTC calendar week, so
+  week-0 activity spilled over the Monday boundary and W+1 read 98%. Aligned to the cohort's
+  calendar week; W+1 is now 55–61%. That first fix packed each newcomer's full first week into the
+  days before Sunday and gave the trend a 3x weekend spike, fixed by scaling the partial week's
+  event count to its length. My fixture tests could not catch either, because they check the
+  engines against my definitions, not the sample data against the engines.
+- Found alongside, not by the reviewers: the seeded `demo` org had no members, so nothing could
+  sign in to view it. `seed:generate` now creates a demo-flagged, TOTP-enrolled owner
+  (`owner@<slug>.seed.test`).
+
 **A test-vs-product distinction worth recording**, not a product defect: an onboarding
 e2e spec asserted the template's original empty-state heading ("Nothing here yet"), which
 this dashboard's real empty state ("No events have been rolled up for this org yet…")
@@ -213,7 +232,7 @@ element is the load run's own progress output, not the chart auto-refreshing.
 ## 6. Load harness (P0-6) and the capstone
 
 `seed:generate` builds a 1.03M-event, ~20k-user, 90-day org with a shaped funnel dropoff
-(20.0k → 14.9k → 4.9k across the three steps) and retention that actually decays toward a
+(20.0k → 14.9k → 5.0k across the three steps) and retention that actually decays toward a
 floor, so the dashboard shows recognizable product shapes rather than uniform noise.
 `load:run` is the other half: an open-loop HTTP load generator against a real running
 build (`next build && next start`), not the dev server, that fires a configurable

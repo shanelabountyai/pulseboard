@@ -62,7 +62,7 @@ no other database load. Medians of 3.
 | Write cost of the `(orgId, ts)` + `(orgId, receivedAt)` Event indexes | `npm run bench:rollups` vs `BENCH_NO_INDEXES=1 npm run bench:rollups` | not measurable at 100k: ~72k vs ~70k ev/s, inside run-to-run noise (±5%). Re-measure at 1M rows in Phase 4 |
 | 3-step funnel, 30-day range, 7-day window, over 1M events / 20k users / 90 days (uniform event names: every user re-enters, a worst case) | `npm run bench:queries` | **256–496ms** over 4 runs (median of 3 each). Without `Event(orgId, userId, eventName, ts, id)`: >9.5 min, cancelled (D-017) |
 | Retention triangle, 13 weekly cohorts × 8 periods, same 1M events, from `RollupUserDay` | `npm run bench:queries` | **425–896ms** over 4 runs (median of 3 each; the slowest ran with 2M dead `Event` tuples from earlier bench deletes, before a VACUUM) |
-| 3-step funnel and retention triangle over the seeded org (1.03M events, shaped dropoff: 20.0k → 14.9k → 4.9k users) | `BENCH_ORG=demo npm run bench:queries` (after `seed:generate`) | funnel **211–236ms**, retention **428–500ms** over 4 runs (median of 3 each) |
+| 3-step funnel and retention triangle over the seeded org (1.03M events, shaped dropoff: 20.0k → 14.9k → 4.9k users; measured 2026-09-26, before the 2026-09-28 seed changes, so re-measure on a quiet machine) | `BENCH_ORG=demo npm run bench:queries` (after `seed:generate`) | funnel **211–236ms**, retention **428–500ms** over 4 runs (median of 3 each) |
 
 The `bench:queries` ingest rate calls `ingest()` in process: it prices the SQL, not HTTP. Over HTTP, `load:run`
 (2026-09-28, same M4, production build `next start`, load client on the same machine, other sessions' background

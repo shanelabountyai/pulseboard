@@ -74,7 +74,10 @@ for (let u = 0; u < users; u++) {
     if (k > 0 && rand() >= 0.05 + 0.5 * 0.75 ** (k - 1)) continue;
     const winStart = k === 0 ? start : cohortWeekStart + k * 7 * DAY;
     const winEnd = cohortWeekStart + (k + 1) * 7 * DAY;
-    for (let i = 14 + Math.floor(rand() * 20); i > 0; i--) await emit(pick(viewed ? engagement : engagement.filter((e) => e !== 'view')), winStart + rand() * (winEnd - winStart));
+    // Scale the signup week's count to its partial length, or a full week's events crowd into the days
+    // before Sunday and the daily trend grows a 3x weekly spike.
+    const n = Math.round((17 + Math.floor(rand() * 23)) * ((winEnd - winStart) / (7 * DAY)));
+    for (let i = n; i > 0; i--) await emit(pick(viewed ? engagement : engagement.filter((e) => e !== 'view')), winStart + rand() * (winEnd - winStart));
   }
 }
 await flush();

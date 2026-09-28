@@ -9,7 +9,7 @@ script — check Troubleshooting before assuming the product broke.
 ```bash
 npm ci
 npm run db:setup            # creates the dev + test databases, writes .env.local/.env.test, migrates both
-npm run seed:generate       # rebuilds org "demo": 20k users, ~1.1M events, 90 days, shaped funnel + retention. ~4 min.
+npm run seed:generate       # rebuilds org "demo": 20k users, ~1.03M events, 90 days, shaped funnel + retention. ~4 min.
 npm run dev                 # http://localhost:4500
 ```
 
@@ -19,7 +19,8 @@ when it finishes — that's the account you'll use. `DEMO_MODE=1` is already set
 
 **Do this right before you present, not the night before:** if it's been more than 90 minutes since
 `seed:generate` last ran, every chart's freshness pill will say "stale," which is accurate but
-reads as broken on a stranger's first glance. Thirty seconds fixes it:
+reads as broken on a stranger's first glance. One command fixes it (about 30 seconds on a quiet
+machine, several minutes if another project's test sweep is running):
 
 ```bash
 npm run rollups:run         # brings the watermark up to now; charts flip back to "data as of <now>"
