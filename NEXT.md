@@ -31,14 +31,21 @@ Measure only on a quiet machine: other sessions' vitest sweeps pushed load avg t
 Plex type scale, validated chart palette, 9 components (AppBar, Button, FilterBar, Freshness, Notice, Panel, TrendChart, FunnelChart,
 RetentionGrid) as `.pb-*` CSS class recipes, cover. Not yet reviewed by Shane on the live page.
 
-## Next item: Phase 4e: apply the design system to `/o/[org]`. Model: Sonnet (spec-following, no new logic).
+**Phase 4e done 2026-09-28:** design system applied to `/o/[org]` (D-021). `src/app/globals.css` (tokens + component
+classes, no Tailwind), Plex via `next/font/google`, `OrgNav.tsx` (client, for real `aria-current`). "SaaS Foundation" title
+fixed to "Pulseboard". Eyeballed against the seeded `demo` org in light, dark and phone width (Playwright screenshots) —
+this was the 4b item still owed. Found and fixed 2 real bugs (trend y-axis repeating-decimal overflow, funnel bar collapsing
+on phones); both synced back to the artifact. typecheck/lint/foundation:drift clean; dashboard.test.ts 2/2 (data layer
+untouched, only presentation changed).
 
-Read the artifact's `project/README.md` ("Using it in the app" section), then `tokens.css` (generated on the page) + `components/bundle.css`
-→ `src/app/globals.css`; Plex via `next/font/google`; `pb-root` on body; restyle `src/app/o/[org]/layout.tsx` (AppBar) and `page.tsx`
-(FilterBar, Panels, TrendChart per its README: y ticks, x dates, endpoint label, `<title>` hit rects; FunnelChart bars; RetentionGrid buckets;
-Freshness state from `ranAt`). Fix the "SaaS Foundation" title. Then eyeball in a browser against the seeded `demo` org (still owed from 4b).
+Note for next session: local dev queries against the `demo` org (1M events) were 15-60x slower than the documented
+benchmarks while eyeballing this — traced to another project's concurrent vitest sweep plus the machine at 34% available
+memory, not a Pulseboard regression (confirmed via EXPLAIN ANALYZE: cold buffer reads, not a bad plan). No code changed
+for it. If dashboard queries look slow again, check `ps aux | grep vitest` and `sysctl -n kern.memorystatus_level` before
+suspecting the app.
 
-Then WRITEUP.md (funnel exemption goes there) and closure deliverables.
+## Next item: WRITEUP.md (funnel exemption goes there), then closure deliverables. Model: Sonnet (writing up decisions/measurements
+already made, no new logic); switch to Opus only if the write-up ends up making a real scope call, not just recording one.
 
 Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
 the benches' org deletes leave millions of dead `Event` tuples, so VACUUM between runs; WRITEUP.md not started.

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { can } from '@/core/authz/permissions';
 import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
+import { OrgNav } from './OrgNav';
 
 // Navigation only. Layouts do not re-run on every navigation, so each page calls requireOrg itself.
 export default async function OrgLayout({ children, params }: { children: React.ReactNode; params: Promise<{ org: string }> }) {
@@ -10,12 +11,15 @@ export default async function OrgLayout({ children, params }: { children: React.
   const base = `/o/${ctx.slug}`;
   return (
     <>
-      <nav>
-        <strong>{org.name}</strong> · <Link href={base}>Home</Link> · <Link href={`${base}/projects`}>Projects</Link> · <Link href={`${base}/settings/members`}>Members</Link>
-        {can(ctx.role, 'billing.manage') && <> · <Link href={`${base}/settings/billing`}>Billing</Link></>}
-        {can(ctx.role, 'org.delete') && <> · <Link href={`${base}/settings/danger`}>Delete org</Link></>}
-        {' · '}<Link href="/onboarding">Your orgs</Link> · <Link href="/account/security">Account</Link>
-      </nav>
+      <header className="pb-appbar">
+        <Link className="pb-wordmark" href={base}>
+          <svg className="pulse" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M1 11h4l2-5 3 9 2.5-7 1.5 3H19" />
+          </svg>
+          Pulseboard
+        </Link>
+        <OrgNav base={base} orgName={org.name} canBilling={can(ctx.role, 'billing.manage')} canDelete={can(ctx.role, 'org.delete')} />
+      </header>
       {children}
     </>
   );
