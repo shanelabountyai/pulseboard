@@ -58,6 +58,29 @@ describe('INV-09 Postgres rate limits', () => {
     expect(await verifyTotp(codeFor(secret))).toBe(false);
   });
 
+  it('invite sends: per-recipient, per-sender and per-org daily caps refuse the next one (FR-03)', async () => {
+    const mail = (to?: string) => db.capturedMessage.count({ where: to ? { to } : { subject: { startsWith: 'You are invited' } } });
+    const org = await makeOrg();
+    const a = await actAs((await addMember(org.id, 'owner', 'a@example.test')).id, org.slug);
+    const b = await actAs((await addMember(org.id, 'admin', 'b@example.test')).id, org.slug);
+    const c = await actAs((await addMember(org.id, 'admin', 'c@example.test')).id, org.slug);
+    // One recipient, from two orgs: the cap follows the address, not the org.
+    const other = await makeOrg('other');
+    const d = await actAs((await addMember(other.id, 'owner', 'd@example.test')).id, other.slug);
+    for (let i = 0; i < LIMITS.invitePerEmailDay.limit; i++) await createInvite(i % 2 ? d : a, 'target@example.test', 'member');
+    await expect(createInvite(d, 'target@example.test', 'member')).rejects.toThrow('Too many');
+    expect(await mail('target@example.test')).toBe(LIMITS.invitePerEmailDay.limit);
+
+    const sendMany = async (ctx: typeof a, tag: string, n: number) => {
+      for (let i = 0; i < n; i++) await createInvite(ctx, `${tag}${i}@example.test`, 'member');
+    };
+    await sendMany(b, 'b', LIMITS.invitePerUserDay.limit);
+    await expect(createInvite(b, 'b-extra@example.test', 'member')).rejects.toThrow('Too many');
+    await sendMany(c, 'c', LIMITS.invitePerOrgDay.limit - LIMITS.invitePerUserDay.limit - 3); // a sent 3 above
+    await expect(createInvite(c, 'c-extra@example.test', 'member')).rejects.toThrow('Too many');
+    expect(await mail()).toBe(LIMITS.invitePerOrgDay.limit + 2); // d's 2 went from the other org
+  });
+
   it('invite accepts: the per-user limit refuses attempt N+1 even with the right token', async () => {
     const org = await makeOrg();
     const owner = await addMember(org.id, 'owner', 'owner@example.test');

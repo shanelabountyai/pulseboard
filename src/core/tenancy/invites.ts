@@ -28,6 +28,14 @@ export async function createInvite(ctx: OrgCtx, emailInput: string, role: Role) 
     const actor = await tx.membership.findUnique({ where: { orgId_userId: { orgId: ctx.orgId, userId: ctx.userId } }, include: { org: true } });
     if (!actor) notFound();
     if (!mayAssign(actor.role, null, role)) throw new AuthzError('members.manage'); // INV-28: owner invites need an owner
+    // Counted on `db`, not `tx`, so a refused invite still counts (FR-03).
+    for (const [key, limit] of [
+      [`invite-send:user:${ctx.userId}`, LIMITS.invitePerUserDay],
+      [`invite-send:org:${ctx.orgId}`, LIMITS.invitePerOrgDay],
+      [`invite-send:email:${email}`, LIMITS.invitePerEmailDay],
+    ] as const) {
+      if (!(await hit(key, limit))) throw new Refused('Too many invites today. Try again tomorrow.');
+    }
     if (await tx.membership.count({ where: { orgId: ctx.orgId, user: { email } } })) throw new Refused('That person is already a member.');
     await tx.invite.updateMany({ where: { ...inOrg(ctx), email, acceptedAt: null, revokedAt: null }, data: { revokedAt: t } });
     const invite = await tx.invite.create({

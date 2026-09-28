@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/core/auth/session';
 import { ActionForm } from '@/core/ui/action-form';
-import { submitRecoveryCode, submitTotp } from './actions';
+import { signOutPending, submitRecoveryCode, submitTotp } from './actions';
 
 export const metadata = { title: 'Two-factor sign-in' };
 
@@ -28,6 +28,9 @@ export default async function Mfa({ searchParams }: { searchParams: Promise<{ er
           <button type="submit">Use recovery code</button>
         </ActionForm>
       </details>
+      <ActionForm action={signOutPending}>
+        <button type="submit">Sign out</button>
+      </ActionForm>
     </main>
   );
 }

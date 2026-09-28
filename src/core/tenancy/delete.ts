@@ -6,11 +6,15 @@ import { db } from '@/core/db';
 import { Refused } from '@/core/errors';
 import { assertOwnerRemains, lockOrg } from './orgs';
 
-/** org.delete + the slug typed to confirm + a fresh sign-in (INV-26). Rows cascade; audit events stay. */
-export async function deleteOrg(ctx: OrgCtx, confirm: string) {
+/**
+ * org.delete + the slug typed to confirm + a fresh sign-in (INV-26). Rows cascade; audit events stay.
+ * `beforeDelete` runs once those checks pass (the app passes `beforeOrgDelete`); if it throws, the org stays.
+ */
+export async function deleteOrg(ctx: OrgCtx, confirm: string, beforeDelete: (orgId: string) => Promise<void> = async () => {}) {
   if (!can(ctx.role, 'org.delete')) throw new AuthzError('org.delete');
   assertFresh(ctx.session);
   if (confirm.trim() !== ctx.slug) throw new Refused('Type the org address exactly to confirm.');
+  await beforeDelete(ctx.orgId);
   await db.$transaction(async (tx) => {
     await tx.org.delete({ where: { id: ctx.orgId } });
     await audit(ctx, 'org.deleted', { targetType: 'org', targetId: ctx.orgId, data: { slug: ctx.slug } }, tx);

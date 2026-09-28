@@ -1,4 +1,6 @@
+import { db } from '@/core/db';
 import { env } from '@/core/env';
+import { Refused } from '@/core/errors';
 
 // The payment seam (CT/BX pattern): Stripe when a key is set, a mock otherwise. Hand-rolled over
 // fetch, not the SDK (RB `stripe-adapter.ts`): two endpoints and one header. Take the SDK if the
@@ -17,20 +19,27 @@ export interface PaymentProvider {
   readonly name: 'stripe' | 'mock';
   checkout(i: CheckoutInput): Promise<string>;
   portal(i: { customerId: string; returnUrl: string }): Promise<string>;
+  /** Cancels now. A subscription Stripe no longer has counts as cancelled. */
+  cancel(subscriptionId: string): Promise<void>;
 }
+
+/** Stripe statuses after which nothing bills again. */
+export const ENDED = ['canceled', 'incomplete_expired'];
+export const isLive = (status: string | null | undefined) => !!status && !ENDED.includes(status);
 
 export const mockProvider: PaymentProvider = {
   name: 'mock',
   // No payment and no state change: the plan moves only when a webhook says so.
   checkout: async (i) => `${i.returnUrl}?checkout=mock`,
   portal: async (i) => `${i.returnUrl}?portal=mock`,
+  cancel: async () => {},
 };
 
 export function stripeProvider(secretKey: string, priceId: string): PaymentProvider {
-  async function post(path: string, params: Record<string, string | null>, idempotencyKey?: string) {
+  async function post(path: string, params: Record<string, string | null>, idempotencyKey?: string, method = 'POST') {
     const body = new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => e[1] !== null));
     const res = await fetch(`https://api.stripe.com/v1${path}`, {
-      method: 'POST',
+      method,
       headers: {
         Authorization: `Bearer ${secretKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -41,6 +50,7 @@ export function stripeProvider(secretKey: string, priceId: string): PaymentProvi
       body,
     });
     const json = (await res.json()) as { url?: string; error?: { message?: string } };
+    if (method === 'DELETE' && (res.ok || res.status === 404)) return '';
     if (!res.ok || !json.url) throw new Error(`Stripe ${path} ${res.status}: ${json.error?.message ?? 'no url'}`);
     return json.url;
   }
@@ -64,6 +74,9 @@ export function stripeProvider(secretKey: string, priceId: string): PaymentProvi
         i.idempotencyKey,
       ),
     portal: (i) => post('/billing_portal/sessions', { customer: i.customerId, return_url: i.returnUrl }),
+    cancel: async (id) => {
+      await post(`/subscriptions/${encodeURIComponent(id)}`, {}, undefined, 'DELETE');
+    },
   };
 }
 
@@ -75,4 +88,16 @@ export function paymentProvider(): PaymentProvider {
   // A mock in production would be a Subscribe button that silently does nothing.
   if (env.VERCEL_ENV === 'production') throw new Error('STRIPE_SECRET_KEY is required in production');
   return mockProvider;
+}
+
+/**
+ * Called by `beforeOrgDelete` before the org goes (FR-05): the cascade drops the billing row, and a
+ * subscription nobody can see any more keeps charging. Throws when it cannot cancel, so the
+ * deletion stops instead.
+ */
+export async function cancelOrgSubscription(orgId: string) {
+  const acct = await db.billingAccount.findUnique({ where: { orgId } });
+  if (!isLive(acct?.status)) return;
+  if (!acct!.stripeSubscriptionId) throw new Refused('This org has a live subscription we cannot cancel from here. Cancel it in Manage billing, then delete.');
+  await paymentProvider().cancel(acct!.stripeSubscriptionId);
 }

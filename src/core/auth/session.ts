@@ -13,6 +13,9 @@ import { hashToken, newToken } from '@/core/tokens';
 export const SESSION_COOKIE = 'session';
 const TTL_MS = 30 * 24 * 3600_000;
 const FRESH_MS = 5 * 60_000;
+// An enrolled user's session that has not passed TOTP dies after this, so one link buys a
+// handful of guesses, not 30 days of them (FR-02).
+export const PENDING_MFA_MS = 10 * 60_000;
 
 export type SessionCtx = {
   hash: string;
@@ -52,6 +55,7 @@ export async function sessionFor(token: string | undefined): Promise<SessionCtx 
     include: { user: { select: { email: true, totpEnrolledAt: true } } },
   });
   if (!s || s.expiresAt <= now()) return null;
+  if (s.user.totpEnrolledAt && !s.mfaAt && now().getTime() - s.authAt.getTime() > PENDING_MFA_MS) return null;
   return { hash: s.hash, userId: s.userId, email: s.user.email, authAt: s.authAt, mfaAt: s.mfaAt, totpEnrolled: !!s.user.totpEnrolledAt };
 }
 

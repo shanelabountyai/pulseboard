@@ -2,10 +2,12 @@ import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
-import { stripeProvider } from '@/modules/billing/provider';
+import { mockProvider, stripeProvider } from '@/modules/billing/provider';
+import { destroyOrg } from '@/app/o/[org]/settings/danger/actions';
+import { startCheckout } from '@/app/o/[org]/settings/billing/actions';
 import { handlers, receiveStripeWebhook, type StripeEvent } from '@/modules/billing/webhook';
 import { resetAuthTables } from '../helpers/auth';
-import { makeOrg } from '../helpers/org';
+import { actAs, addMember, makeOrg } from '../helpers/org';
 
 beforeEach(resetAuthTables);
 afterEach(() => vi.restoreAllMocks());
@@ -15,12 +17,13 @@ const sign = (raw: string, t = Math.floor(now().getTime() / 1000), secret = SECR
   `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${raw}`).digest('hex')}`;
 
 let seq = 0;
-const subEvent = (orgId: string, o: { status?: string; price?: string; created?: number; type?: string; id?: string } = {}): StripeEvent => ({
+const subEvent = (orgId: string, o: { status?: string; price?: string; created?: number; type?: string; id?: string; sub?: string } = {}): StripeEvent => ({
   id: o.id ?? `evt_${++seq}`,
   type: o.type ?? 'customer.subscription.updated',
   created: o.created ?? 1_800_000_000,
   data: {
     object: {
+      id: o.sub ?? 'sub_1',
       customer: 'cus_1',
       status: o.status ?? 'active',
       metadata: { orgId },
@@ -119,6 +122,61 @@ describe('INV-12 a failed delivery is re-applied; a true duplicate is a no-op', 
     expect((await deliver(subEvent('not-a-uuid'))).status).toBe(200);
     expect(await db.billingAccount.count()).toBe(0);
     expect(await db.stripeEvent.count({ where: { processedAt: null } })).toBe(0);
+  });
+});
+
+describe('FR-04 the org follows one subscription; FR-05 deleting the org cancels it', () => {
+  it('a second subscription cannot overwrite the bound one; after that one ends, a re-subscribe takes over', async () => {
+    const org = await makeOrg();
+    await deliver(subEvent(org.id, { sub: 'sub_A', created: 1_800_000_000 }));
+    await deliver(subEvent(org.id, { sub: 'sub_B', status: 'canceled', created: 1_800_000_100 }));
+    expect(await account(org.id)).toMatchObject({ stripeSubscriptionId: 'sub_A', status: 'active' });
+    await deliver(subEvent(org.id, { sub: 'sub_A', status: 'canceled', created: 1_800_000_200 }));
+    await deliver(subEvent(org.id, { sub: 'sub_C', price: 'price_max', created: 1_800_000_300 }));
+    expect(await account(org.id)).toMatchObject({ stripeSubscriptionId: 'sub_C', status: 'active', plan: 'price_max' });
+    await deliver(subEvent(org.id, { sub: 'sub_A', status: 'canceled', created: 1_800_000_400 })); // the old one, late
+    expect(await account(org.id)).toMatchObject({ stripeSubscriptionId: 'sub_C', status: 'active' });
+  });
+
+  it('checkout is refused while the org has a live subscription', async () => {
+    const org = await makeOrg();
+    await actAs((await addMember(org.id, 'owner', 'owner@example.test')).id, org.slug);
+    const attempt = { attempt: 'attempt-0123456789abcdef' };
+    await deliver(subEvent(org.id, { status: 'past_due' }));
+    expect(await startCheckout(org.slug, attempt)).toMatchObject({ error: expect.stringContaining('already has a subscription') });
+    await deliver(subEvent(org.id, { status: 'canceled', created: 1_800_000_100 }));
+    await expect(startCheckout(org.slug, attempt)).rejects.toThrow('checkout=mock'); // on to checkout
+  });
+
+  it('deleting the org cancels a live subscription first; if that fails the org stays', async () => {
+    const cancel = vi.spyOn(mockProvider, 'cancel');
+    const org = await makeOrg();
+    await actAs((await addMember(org.id, 'owner', 'owner@example.test')).id, org.slug);
+    await deliver(subEvent(org.id, { sub: 'sub_A' }));
+    cancel.mockRejectedValueOnce(new Error('stripe down'));
+    await expect(destroyOrg(org.slug, { confirm: org.slug })).rejects.toThrow('stripe down');
+    expect(await db.org.count()).toBe(1);
+    await expect(destroyOrg(org.slug, { confirm: org.slug })).rejects.toThrow('/onboarding');
+    expect(cancel).toHaveBeenLastCalledWith('sub_A');
+    expect(await db.org.count()).toBe(0);
+
+    const ended = await makeOrg('ended');
+    await actAs((await addMember(ended.id, 'owner', 'o2@example.test')).id, ended.slug);
+    await deliver(subEvent(ended.id, { sub: 'sub_E', status: 'canceled' }));
+    await expect(destroyOrg(ended.slug, { confirm: ended.slug })).rejects.toThrow('/onboarding');
+    expect(cancel).toHaveBeenCalledTimes(2); // not for the ended one
+  });
+
+  it('stripe cancel is a DELETE, and a subscription Stripe no longer has counts as cancelled', async () => {
+    const calls: [string, string][] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push([String(init?.method), String(url)]);
+      return Response.json({ error: { message: 'No such subscription' } }, { status: calls.length === 1 ? 404 : 500 });
+    });
+    const p = stripeProvider('sk_test_x', 'price_pro');
+    await p.cancel('sub_gone');
+    await expect(p.cancel('sub_x')).rejects.toThrow('500');
+    expect(calls[0]).toEqual(['DELETE', 'https://api.stripe.com/v1/subscriptions/sub_gone']);
   });
 });
 

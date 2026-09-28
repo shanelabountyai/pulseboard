@@ -2,16 +2,15 @@ import { requireOrg } from '@/core/authz/guards';
 import { db } from '@/core/db';
 import { newToken } from '@/core/tokens';
 import { ActionForm } from '@/core/ui/action-form';
+import { isLive } from '@/modules/billing/provider';
 import { openPortal, startCheckout } from './actions';
 
 export const metadata = { title: 'Billing' };
 
-const LIVE = ['active', 'trialing', 'past_due'];
-
 export default async function Billing({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ checkout?: string }> }) {
   const ctx = await requireOrg((await params).org, 'billing.manage');
   const [acct, { checkout }] = await Promise.all([db.billingAccount.findUnique({ where: { orgId: ctx.orgId } }), searchParams]);
-  const live = acct?.status != null && LIVE.includes(acct.status);
+  const live = isLive(acct?.status);
 
   return (
     <main>
