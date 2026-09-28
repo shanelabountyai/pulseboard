@@ -27,9 +27,17 @@ after `seed:generate`; check chart shapes, and that the default 90d range is fas
 reproducible under overload). D-011 index A/B: no throughput cost, worse tail near saturation, kept. README → Performance.
 Measure only on a quiet machine: other sessions' vitest sweeps pushed load avg to 48 and made the first runs read p95 2.3s.
 
-## Next item: Phase 4d: design system (D-019; artifact first, via Artifact quickstart). Model: Opus for the system, Sonnet fine for 4e.
+**Phase 4d done 2026-09-28:** design system published: https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020). Tokens light/dark,
+Plex type scale, validated chart palette, 9 components (AppBar, Button, FilterBar, Freshness, Notice, Panel, TrendChart, FunnelChart,
+RetentionGrid) as `.pb-*` CSS class recipes, cover. Not yet reviewed by Shane on the live page.
 
-Then **4e: apply it** to `/o/[org]` (also fix the "SaaS Foundation" title).
+## Next item: Phase 4e: apply the design system to `/o/[org]`. Model: Sonnet (spec-following, no new logic).
+
+Read the artifact's `project/README.md` ("Using it in the app" section), then `tokens.css` (generated on the page) + `components/bundle.css`
+→ `src/app/globals.css`; Plex via `next/font/google`; `pb-root` on body; restyle `src/app/o/[org]/layout.tsx` (AppBar) and `page.tsx`
+(FilterBar, Panels, TrendChart per its README: y ticks, x dates, endpoint label, `<title>` hit rects; FunnelChart bars; RetentionGrid buckets;
+Freshness state from `ranAt`). Fix the "SaaS Foundation" title. Then eyeball in a browser against the seeded `demo` org (still owed from 4b).
+
 Then WRITEUP.md (funnel exemption goes there) and closure deliverables.
 
 Open, carried: rollups ride the hourly cron vs PRD's 5-minute freshness (D-013); registering a property does not backfill (D-012);
