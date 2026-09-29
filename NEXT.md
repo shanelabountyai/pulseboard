@@ -16,7 +16,9 @@ Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa
 
 ## Next item: nothing queued
 
-Last done (2026-09-29): rollup overlap re-scan after bulk loads, D-023. Pick from "Open, carried" if reopened.
+Last done (2026-09-29): persona polish. Funnel footnote reworded for readers; org admin links (Members, Billing,
+Delete org) moved to the right edge beside Account; the Billing prop now carries the `// billing` marker in `layout.tsx`
+(a MARKED_FILE), so removing the billing module drops the link. Before that: rollup overlap re-scan, D-023. Pick from "Open, carried" if reopened.
 
 ## Cross-project leftovers (from the 2026-09-29 Vercel/Actions sweep, recorded in `~/.claude/docs/conventions.md`)
 
@@ -30,9 +32,6 @@ Last done (2026-09-29): rollup overlap re-scan after bulk loads, D-023. Pick fro
 
 - **Re-measure `BENCH_ORG=demo npm run bench:queries` on a quiet machine.** The README row is from the 2026-09-26 seed; the seed
   changed 2026-09-28 (calendar-week alignment, weekend-spike fix, demo owner). Still ~1.03M events.
-- Persona reviewers' remaining polish, not fixed: the funnel panel's footnote is engineer-facing wording; the template's
-  Billing / Delete org nav items show on the dashboard.
-- `OrgNav.tsx` Billing link has no `{/* billing */}` marker, so `check-modules` would leave a dead link after billing removal.
 - Rollups ride the hourly cron vs the PRD's 5-minute freshness (D-013). Registering a property does not backfill (D-012).
 - Bench org deletes leave millions of dead `Event` tuples: VACUUM between runs.
 - Local test DB can end a sweep with `Org` "Acme" instead of "Acme Studio" (test files share `slug: 'acme'`), breaking

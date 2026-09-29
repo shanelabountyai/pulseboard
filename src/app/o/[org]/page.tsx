@@ -155,7 +155,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
               </li>
             ))}
           </ol>
-          <p className="pb-panel-note">Within 7 days of signup. Computed from raw events, because ordered sequences cannot come from daily rollups.</p>
+          <p className="pb-panel-note">Users who did each step in this order within 7 days of signing up.</p>
         </section>
 
         <section className="pb-panel">

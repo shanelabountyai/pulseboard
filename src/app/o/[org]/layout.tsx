@@ -18,7 +18,12 @@ export default async function OrgLayout({ children, params }: { children: React.
           </svg>
           Pulseboard
         </Link>
-        <OrgNav base={base} orgName={org.name} canBilling={can(ctx.role, 'billing.manage')} canDelete={can(ctx.role, 'org.delete')} />
+        <OrgNav
+          base={base}
+          orgName={org.name}
+          canBilling={can(ctx.role, 'billing.manage')} // billing
+          canDelete={can(ctx.role, 'org.delete')}
+        />
       </header>
       {children}
     </>
