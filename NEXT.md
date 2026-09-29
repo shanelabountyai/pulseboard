@@ -2,19 +2,22 @@
 
 **Every item:** run `gh run list --limit 3` before starting and after pushing. If CI is red, fixing it is the item, ahead of the queue.
 
-## Closure status (2026-09-28)
+## Closure status (2026-09-29): all five deliverables done — project closed
 
 | Deliverable | State |
 |---|---|
 | WRITEUP.md | done (all phases, funnel exemption, persona-review defects) |
 | docs/DEMO.md | done, every command run once |
 | Exec brief | done: **Pulseboard in Brief** https://claude.ai/artifact/8i6b88qePxaCTg1PU83L5N (private; share before linking anywhere) |
-| LinkedIn posts → Lab Intelligence Ledger | **not started** |
+| LinkedIn posts → Lab Intelligence Ledger | done 2026-09-29: #82 "98% demo retention" and #83 "blank vs zero", both Impact, in https://claude.ai/artifact/Ai5xKScgT2sWtqXRQ1ZA8i. Harvested but not drafted: funnel ≠ daily ratio (MarTech), measured-didn't-build (Scale). #83 partly overlaps #21's "—, not 0%" paragraph |
 | Cost review | done: D-022 (baseline $0, nothing deployed; cron → daily if ever deployed, restore note in D-022) |
 
 Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020; not yet reviewed by Shane on the live page).
+Build log row (`analytics`) set to shipped with repo, write-up, brief and demo links, 2026-09-29.
 
-## Next item: LinkedIn posts (Opus or Sonnet, `linkedin-personal-brand-shane` skill) — last closure deliverable
+## Next item: none queued — pick from "Open, carried" if the project is reopened
+
+Context from the last build item:
 
 Foundation merged to **v1.2.0** 2026-09-28 (covers v1.1.0, the `security:` v1.1.1, and F-03); template `CLONES.md` row bumped.
 Clone-side changes: `/ingest` carries `// public:` for the FR-06 guard check; `FOUNDATION_PATCHES.md` is empty. Locally,
