@@ -46,10 +46,24 @@ Plan, per project (`vercel project ls --scope shanelabountyai-8212s-projects` fo
 3. Record the decision + restore note (delete the `git` key to restore; trigger: a project needing continuous preview/prod) in each repo's decisions log, and once in `~/.claude/docs/conventions.md` → Vercel.
 4. Commit + push each. **CI is blocked account-wide until GitHub billing is fixed** (see below), so expect 5-second CI failures that aren't code.
 
-**Blocked on Shane:** GitHub Actions account lockout since 2026-09-28 ~23:35 UTC ("recent account payments have failed or your spending
-limit needs to be increased") — fix at github.com/settings/billing. Pulseboard run 36582801249 failed in 5s from it. After that, cheap
-Actions fixes: `concurrency: {group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true}` on all 6 CI workflows; path filters
-on handhold's 4 parallel jobs (1,131 min / 50 runs, the top consumer); `paths-ignore` docs skip for event-toolkit.
+**Part B (Actions fixes) is DONE, 2026-09-29.** Shane added $10 to the GitHub Actions budget, clearing the account-wide lockout
+(confirmed: pulseboard run 36589296965 went green right after). Then, for each of the 6 repos missing a concurrency group
+(pulseboard, event-toolkit, clearpath, showcall, handhold, callboard — the only 6 among the 12 Part-A repos + pulseboard that
+had CI and lacked one; storage/rental/bookable/countertop/countertop-reserve already had it, design-bridge/talk4me have no CI):
+added `concurrency: {group: ci-${{ github.ref }}, cancel-in-progress: true}`, matching the pattern already in use elsewhere.
+Also: event-toolkit got `paths-ignore` for `**.md`/`docs/**`/`prd/**` (matches the handhold pattern). Handhold's single
+4-job ci.yml (1,131 min / 50 runs, the top consumer) was split into 4 path-filtered workflow files (`backend-ci.yml`,
+`site-ci.yml`, `frontend-ci.yml`, `admin-frontend-ci.yml`) since GitHub has no per-job path filter within one workflow —
+each now only runs when its own subtree changes. All 6 repos' CI confirmed green post-change (event-toolkit via the next
+push, since its own commit's run got cancelled by that push — the concurrency group working as intended). Handhold's split
+workflows registered correctly on GitHub (`gh workflow list`) but are unverified by a real trigger yet, since this push only
+touched `.github/workflows/`; will self-verify on the next push that touches `backend/`, `site/` (handhold-site), `frontend/`,
+or `admin-frontend/`.
+
+Caution for next session: the local `onsitestaffing` (callboard) checkout was mid-feature on `s3-stage-buttons` — pushed this
+fix via a worktree on `main` again, same as Part A. The local `alongside` (handhold) checkout has substantial uncommitted
+companion-feature work (backend/frontend) on `main` — staged and committed only the `.github/workflows/` files, left everything
+else untouched; that work is still sitting uncommitted there.
 
 Pulseboard itself: nothing queued — pick from "Open, carried" if reopened.
 
