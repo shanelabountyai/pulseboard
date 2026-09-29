@@ -98,6 +98,16 @@ describe('rollups', () => {
     expect(await daily()).toEqual([[iso(0), 'signup', 1, 1], [iso(3), 'signup', 1, 1]]);
   });
 
+  it('an idle org stops re-scanning once a run has started past the overlap window', async () => {
+    await ingest(orgId, [ev('signup', 'u1', at(0)), ev('signup', 'u1', at(5))]); // a bulk load spanning days
+    expect((await runRollupsForOrg(orgId)).days).toBe(2);
+    advanceClock(2 * 60_000);
+    expect((await runRollupsForOrg(orgId)).days).toBe(2); // started too close to the load to trust it saw every commit
+    advanceClock(2 * 60_000);
+    expect((await runRollupsForOrg(orgId)).days).toBe(0); // the previous run started > OVERLAP_MS after the watermark
+    expect(await verifyRollups()).toEqual([]);
+  });
+
   it('verify reports drift, and treats not-yet-rolled-up days as pending rather than drift', async () => {
     await ingest(orgId, [ev('signup', 'u1', at(0)), ev('signup', 'u2', at(0))]);
     expect(await verifyRollups()).toEqual([]); // nothing rolled up yet: pending

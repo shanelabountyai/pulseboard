@@ -66,10 +66,13 @@ seen) drives a scan for UTC days touched since then; every dirty day is rebuilt 
 `DELETE` + `INSERT … SELECT` inside one transaction per org, and the watermark advances in
 that same transaction — a re-run of a window and a replayed batch are exact by
 construction because nothing is ever added to an existing number, only replaced. The scan
-looks 60 seconds behind the watermark on every run (`OVERLAP_MS`), because `receivedAt` is
+looks 60 seconds behind the watermark (`OVERLAP_MS`), because `receivedAt` is
 stamped by the app before its insert commits, so a slow commit can make a row visible
-*after* a run has already advanced past it; the overlap costs re-running the latest day
-again, never a double count. (`ponytail:` that window is fixed at 60s — real skew or
+*after* a run has already advanced past it; the overlap costs re-running the latest days
+again, never a double count. It only reaches back from the previous run's *start*, so once
+a run has started more than 60s after the watermark, an idle org re-scans nothing (D-023:
+before that, a bulk load's last minute spanned 90 days of `ts` and every idle run rebuilt
+all of them). (`ponytail:` that window is fixed at 60s — real skew or
 commit latency beyond it drops a late row until its day is dirtied again by a later
 event.) The watermark row's own lock (`SELECT … FOR UPDATE`) serializes two runs for the
 same org, so there's no separate locking mechanism to get wrong.

@@ -24,13 +24,17 @@ export async function runRollups(): Promise<RollupResult[]> {
  * concurrent runs for the same org.
  */
 export async function runRollupsForOrg(orgId: string): Promise<RollupResult> {
+  // Stamped before the scan, so ranAt never postdates what the run could see.
+  const started = now();
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`
-      INSERT INTO "RollupWatermark" ("orgId", "receivedAt", "ranAt") VALUES (${orgId}::uuid, 'epoch', ${now()})
+      INSERT INTO "RollupWatermark" ("orgId", "receivedAt", "ranAt") VALUES (${orgId}::uuid, 'epoch', 'epoch')
       ON CONFLICT DO NOTHING`;
-    const [mark] = await tx.$queryRaw<{ receivedAt: Date }[]>`
-      SELECT "receivedAt" FROM "RollupWatermark" WHERE "orgId" = ${orgId}::uuid FOR UPDATE`;
-    const since = new Date(mark!.receivedAt.getTime() - OVERLAP_MS);
+    const [mark] = await tx.$queryRaw<{ receivedAt: Date; ranAt: Date }[]>`
+      SELECT "receivedAt", "ranAt" FROM "RollupWatermark" WHERE "orgId" = ${orgId}::uuid FOR UPDATE`;
+    // A row the previous run missed committed after it started, so under the OVERLAP_MS ceiling it was stamped no
+    // earlier than that start − OVERLAP_MS. Once a run starts well past the watermark, idle runs re-scan nothing.
+    const since = new Date(Math.min(mark!.receivedAt.getTime(), mark!.ranAt.getTime() - OVERLAP_MS));
 
     const [scan] = await tx.$queryRaw<{ days: string[] | null; max: Date | null }[]>`
       SELECT array_agg(DISTINCT to_char("ts" AT TIME ZONE 'UTC', 'YYYY-MM-DD')) AS days, max("receivedAt") AS max
@@ -82,7 +86,7 @@ export async function runRollupsForOrg(orgId: string): Promise<RollupResult> {
 
     const watermark = scan?.max && scan.max > mark!.receivedAt ? scan.max : mark!.receivedAt;
     await tx.$executeRaw`
-      UPDATE "RollupWatermark" SET "receivedAt" = ${watermark}, "ranAt" = ${now()} WHERE "orgId" = ${orgId}::uuid`;
+      UPDATE "RollupWatermark" SET "receivedAt" = ${watermark}, "ranAt" = ${started} WHERE "orgId" = ${orgId}::uuid`;
     return { orgId, days: days.length, watermark };
   }, { timeout: 10 * 60_000, maxWait: 60_000 });
 }
