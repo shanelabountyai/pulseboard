@@ -15,12 +15,24 @@
 Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020; not yet reviewed by Shane on the live page).
 Build log row (`analytics`) set to shipped with repo, write-up, brief and demo links, 2026-09-29.
 
-## Next item (cross-project, not pulseboard code): Vercel auto-deploy off everywhere + GitHub Actions minute fixes — Sonnet fits (mechanical config)
+## Next item (cross-project, not pulseboard code): GitHub Actions minute fixes — Sonnet fits (mechanical config)
 
-Scope agreed 2026-09-29: both halves in one session, same repos. Part A = Vercel (below). Part B = the Actions fixes listed under
-"Blocked on Shane" (concurrency cancel-in-progress on all 6 CI workflows, handhold path filters, event-toolkit docs skip), each committed
-per repo with a decisions-log line. Shane is setting a capped Actions spending limit (~$10–15/mo) or fixing the card; confirm CI runs
-again (a real run, not a 5s failure) before trusting any Part B change.
+**Part A (Vercel auto-deploy off) is DONE, 2026-09-29.** All 12 deployed clone projects got `git.deploymentEnabled: false`
+in their `vercel.json` plus a `main-manual` Deploy Hook, committed and pushed: self-storage-app, rental-business,
+event-toolkit, bookable, countertop, countertop-reserve-web, design-bridge, clearpath, talk4me, showcall, handhold
+(handhold-site only — `frontend`/`admin-frontend` aren't linked to any Vercel project), callboard (pushed via a
+worktree since the local checkout was mid-feature on `s2-top-bar`; that branch was never touched). Spot-checked on
+self-storage-app: the hook fires a real deployment, a plain push does not. Decision recorded per repo — `docs/prds/07-decisions.md`
+(storage D-155, rental D-277, bookable D-71), `docs/decisions.md` (talk4me, showcall D-033), a one-off `DECISION-*.md`
+(handhold), or just the commit message where no log convention exists (event-toolkit, countertop, countertop-reserve,
+design-bridge, clearpath, callboard). Global note in `~/.claude/docs/conventions.md` → Vercel. **Not resolved:** 3 Vercel
+projects (`use-case-studio`, `labintelligence-site`, `labintelligence`) have no obvious matching repo under `~/Projects` —
+still on auto-deploy, needs Shane to point at them if they should be included. Ran in the foreground this session (the
+background-agent version of this sweep was blocked by Claude Code's own "Modify Shared Resources" classifier).
+
+**Part B (Actions fixes) is still blocked** — listed under "Blocked on Shane" below. Each fix should be committed
+per repo with a decisions-log line once unblocked. Confirm CI runs again (a real run, not a 5s failure) before trusting
+any Part B change.
 
 **Decided by Shane 2026-09-29:** hold the Vercel spend cap; turn off per-push deploys on **every** Vercel project; deploy deliberately.
 Why: usage run-rate is $25–30/mo against the $20 Pro allocation (Sep 1–29: $25.34 usage + $19.12 seat; crossed $20 on 9/23;
