@@ -15,7 +15,12 @@
 Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020; not yet reviewed by Shane on the live page).
 Build log row (`analytics`) set to shipped with repo, write-up, brief and demo links, 2026-09-29.
 
-## Next item (cross-project, not pulseboard code): Vercel auto-deploy off everywhere — Sonnet fits (mechanical config)
+## Next item (cross-project, not pulseboard code): Vercel auto-deploy off everywhere + GitHub Actions minute fixes — Sonnet fits (mechanical config)
+
+Scope agreed 2026-09-29: both halves in one session, same repos. Part A = Vercel (below). Part B = the Actions fixes listed under
+"Blocked on Shane" (concurrency cancel-in-progress on all 6 CI workflows, handhold path filters, event-toolkit docs skip), each committed
+per repo with a decisions-log line. Shane is setting a capped Actions spending limit (~$10–15/mo) or fixing the card; confirm CI runs
+again (a real run, not a 5s failure) before trusting any Part B change.
 
 **Decided by Shane 2026-09-29:** hold the Vercel spend cap; turn off per-push deploys on **every** Vercel project; deploy deliberately.
 Why: usage run-rate is $25–30/mo against the $20 Pro allocation (Sep 1–29: $25.34 usage + $19.12 seat; crossed $20 on 9/23;
