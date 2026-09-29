@@ -9,7 +9,7 @@ let otherId: string;
 
 beforeEach(async () => {
   await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "RollupDaily", "RollupDailyProp", "RollupUserDay", "RegisteredProperty", "RollupWatermark", "Org" CASCADE`;
-  orgId = (await db.org.create({ data: { slug: 'acme', name: 'Acme' } })).id;
+  orgId = (await db.org.create({ data: { slug: 'test-org', name: 'Test Org' } })).id;
   otherId = (await db.org.create({ data: { slug: 'other', name: 'Other' } })).id;
 });
 afterAll(() => db.$disconnect());

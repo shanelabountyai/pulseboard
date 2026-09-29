@@ -22,7 +22,7 @@ let orgId: string;
 beforeAll(async () => {
   advanceClock(0);
   await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "RollupDaily", "RollupDailyProp", "RollupUserDay", "RegisteredProperty", "RollupWatermark", "Org" CASCADE`;
-  orgId = (await db.org.create({ data: { slug: 'acme', name: 'Acme' } })).id;
+  orgId = (await db.org.create({ data: { slug: 'test-org', name: 'Test Org' } })).id;
   const other = (await db.org.create({ data: { slug: 'other', name: 'Other' } })).id;
 
   await ingest(orgId, [

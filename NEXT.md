@@ -16,7 +16,8 @@ Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa
 
 ## Next item: nothing queued
 
-Last done (2026-09-29): persona polish. Funnel footnote reworded for readers; org admin links (Members, Billing,
+Last done (2026-09-29): integration tests moved off the seed's `acme` slug to `test-org`, so a local sweep no longer
+leaves "Acme" for `e2e/demo.spec.ts` (the seed upserts with `update: {}` and never renamed it). Before that: persona polish. Funnel footnote reworded for readers; org admin links (Members, Billing,
 Delete org) moved to the right edge beside Account; the Billing prop now carries the `// billing` marker in `layout.tsx`
 (a MARKED_FILE), so removing the billing module drops the link. Before that: rollup overlap re-scan, D-023. Pick from "Open, carried" if reopened.
 
@@ -33,8 +34,6 @@ Delete org) moved to the right edge beside Account; the Billing prop now carries
   changed 2026-09-28 (calendar-week alignment, weekend-spike fix, demo owner). Still ~1.03M events.
 - Rollups ride the hourly cron vs the PRD's 5-minute freshness (D-013). Registering a property does not backfill (D-012).
 - Bench org deletes leave millions of dead `Event` tuples: VACUUM between runs.
-- Local test DB can end a sweep with `Org` "Acme" instead of "Acme Studio" (test files share `slug: 'acme'`), breaking
-  `e2e/demo.spec.ts` locally only. `TRUNCATE "Org" CASCADE` and rerun. CI unaffected.
 - `tests/invariants/inv-09-rate-limits.test.ts` hit one Postgres deadlock in `resetAuthTables` while another project's
   18-worker sweep was running; clean on rerun. If it recurs on a quiet machine, look at it then.
 - This laptop runs other projects' sweeps concurrently (load avg up to 45 on 2026-09-29). Before trusting any timing, check

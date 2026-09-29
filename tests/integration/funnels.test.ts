@@ -24,7 +24,7 @@ const group = (g: string, n: number, events: (u: string) => ReturnType<typeof ev
 
 beforeAll(async () => {
   await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "RollupDaily", "RollupDailyProp", "RollupUserDay", "RegisteredProperty", "RollupWatermark", "Org" CASCADE`;
-  orgId = (await db.org.create({ data: { slug: 'acme', name: 'Acme' } })).id;
+  orgId = (await db.org.create({ data: { slug: 'test-org', name: 'Test Org' } })).id;
   otherOrg = (await db.org.create({ data: { slug: 'other', name: 'Other' } })).id;
 
   const rows = [

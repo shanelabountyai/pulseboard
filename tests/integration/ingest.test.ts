@@ -10,7 +10,7 @@ let orgId: string;
 beforeEach(async () => {
   advanceClock(0);
   await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "WriteKey", "Org" CASCADE`;
-  orgId = (await db.org.create({ data: { slug: 'acme', name: 'Acme' } })).id;
+  orgId = (await db.org.create({ data: { slug: 'test-org', name: 'Test Org' } })).id;
   key = newToken();
   await db.writeKey.create({ data: { orgId, keyHash: hashToken(key) } });
 });
