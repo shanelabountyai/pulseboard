@@ -22,8 +22,7 @@ Delete org) moved to the right edge beside Account; the Billing prop now carries
 
 ## Cross-project leftovers (from the 2026-09-29 Vercel/Actions sweep, recorded in `~/.claude/docs/conventions.md`)
 
-- 3 Vercel projects (`use-case-studio`, `labintelligence-site`, `labintelligence`) have no matching repo under `~/Projects` and are
-  still on auto-deploy. Needs Shane to point at them.
+- ~~3 Vercel projects on auto-deploy~~ resolved 2026-09-29: `use-case-studio` off (8cb6285, no deploy hook yet), the two `labintelligence*` projects have no Git link, so nothing to turn off.
 - Handhold's 4 split, path-filtered workflows are registered but unverified until a push touches `backend/`, `site/`, `frontend/` or `admin-frontend/`.
 - Local `alongside` (handhold) checkout has substantial uncommitted companion-feature work on `main`. Local `onsitestaffing`
   (callboard) is mid-feature on `s3-stage-buttons`. Both sweeps pushed via targeted commits/worktrees and left that work alone.
