@@ -15,7 +15,26 @@
 Other artifacts: design system https://claude.ai/artifact/7D65arDGpQEq88bpyT6eWa (D-020; not yet reviewed by Shane on the live page).
 Build log row (`analytics`) set to shipped with repo, write-up, brief and demo links, 2026-09-29.
 
-## Next item: none queued — pick from "Open, carried" if the project is reopened
+## Next item (cross-project, not pulseboard code): Vercel auto-deploy off everywhere — Sonnet fits (mechanical config)
+
+**Decided by Shane 2026-09-29:** hold the Vercel spend cap; turn off per-push deploys on **every** Vercel project; deploy deliberately.
+Why: usage run-rate is $25–30/mo against the $20 Pro allocation (Sep 1–29: $25.34 usage + $19.12 seat; crossed $20 on 9/23;
+storage $10.26, rental $7.35, clearpath $2.12, handhold $1.63, countertop $1.57; 97%+ build minutes; ignoreCommands verified working,
+no failed builds; storage 85 real builds/week, rental 61). Accepted cost: a live demo lags main until deployed.
+
+Plan, per project (`vercel project ls --scope shanelabountyai-8212s-projects` for the list):
+1. Add `"git": {"deploymentEnabled": false}` to the root `vercel.json` (countertop-reserve: repo-root one, Root Directory stays `.`). Keep the `ignoreCommand`.
+2. Create a Deploy Hook (Project → Settings → Git) for `main` as the deliberate path; verify it still triggers with deploymentEnabled off
+   before relying on it. Never deploy with `vercel --prod` from a working tree (conventions.md).
+3. Record the decision + restore note (delete the `git` key to restore; trigger: a project needing continuous preview/prod) in each repo's decisions log, and once in `~/.claude/docs/conventions.md` → Vercel.
+4. Commit + push each. **CI is blocked account-wide until GitHub billing is fixed** (see below), so expect 5-second CI failures that aren't code.
+
+**Blocked on Shane:** GitHub Actions account lockout since 2026-09-28 ~23:35 UTC ("recent account payments have failed or your spending
+limit needs to be increased") — fix at github.com/settings/billing. Pulseboard run 36582801249 failed in 5s from it. After that, cheap
+Actions fixes: `concurrency: {group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true}` on all 6 CI workflows; path filters
+on handhold's 4 parallel jobs (1,131 min / 50 runs, the top consumer); `paths-ignore` docs skip for event-toolkit.
+
+Pulseboard itself: nothing queued — pick from "Open, carried" if reopened.
 
 Context from the last build item:
 
