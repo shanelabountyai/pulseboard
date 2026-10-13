@@ -17,7 +17,7 @@ npm run dev                 # http://localhost:4500
 when it finishes — that's the account you'll use. `DEMO_MODE=1` is already set in `.env.local`
 (that flag is what makes `/demo` exist at all; it 404s otherwise).
 
-**Do this right before you present, not the night before:** if it's been more than 90 minutes since
+**Do this right before you present, not the night before:** if it's been more than 26 hours since
 `seed:generate` last ran, every chart's freshness pill will say "stale," which is accurate but
 reads as broken on a stranger's first glance. One command fixes it (about 30 seconds on a quiet
 machine, several minutes if another project's test sweep is running):
@@ -40,7 +40,7 @@ asks — see below.)
 
 The top panel: daily counts for a chosen event, with a date range and a property filter (`plan`,
 `platform`). Every panel prints **exactly when its data was last refreshed** — top right, "data as
-of `<timestamp>`," turning amber past 90 minutes.
+of `<timestamp>`," turning amber past 26 hours (the daily cron plus slack, D-024).
 
 **Say:** "This reads from a pre-aggregated rollup table, never the raw event log — that's true of
 every chart except the funnel, and I can show you why that one's different." Point out that a day
@@ -106,7 +106,7 @@ instead: `npm run build && npm start`, then `npm run load:run` in the second ter
 | `/demo` 404s | `DEMO_MODE` isn't `1` | Check `.env.local`; restart `npm run dev` after changing it |
 | No accounts listed on `/demo` | `seed:generate` (or `seed:demo`) hasn't run | Run `npm run seed:generate`; wait for the ~4 min to finish |
 | Dashboard says "No events have been rolled up for this org yet" | Signed in, but events haven't been rolled up | `npm run rollups:run`, then reload |
-| Every chart says "stale" | Last rollup run was >90 min ago | `npm run rollups:run` right before presenting |
+| Every chart says "stale" | Last rollup run was >26 h ago | `npm run rollups:run` right before presenting |
 | Trend line has a hard drop to 0 at the right edge | You're on an old build — this exact bug was fixed and tested (see WRITEUP.md, Screen 2) | `git pull`, rerun `npm run dev` |
 | Retention's newest week shows "0%" everywhere | Same class of bug as above, in the retention grid | Same fix, already shipped — pull latest |
 | `npm run load:run` errors "start the server" | No server listening on port 4500 (or `LOAD_URL`) | `npm run dev` (or `npm run build && npm start`) in another terminal first |
@@ -118,7 +118,7 @@ instead: `npm run build && npm start`, then `npm run load:run` in the second ter
 
 - **One org per deployment.** This is a single product's analytics layer, not a resellable
   multi-tenant SaaS — that's a different project's lesson (see the PRD's own non-goals).
-- **Hourly freshness, not real-time.** Rollups ride an existing hourly cron; the PRD's 5-minute
+- **Daily freshness, not real-time.** Rollups ride a once-a-day cron (`0 6 * * *`, D-024); the PRD's 5-minute
   target is a known, documented gap (D-013), not something that quietly slipped.
 - **All the funnel/retention numbers on screen are synthetic.** `seed:generate` shapes a
   believable dropoff and decay curve on purpose, so the charts aren't empty or uniform noise — it's

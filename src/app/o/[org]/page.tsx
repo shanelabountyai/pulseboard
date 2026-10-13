@@ -2,11 +2,10 @@ import { requireOrg } from '@/core/authz/guards';
 import { now } from '@/core/clock';
 import { funnel } from '@/lib/funnels';
 import { retention, PERIODS } from '@/lib/retention';
-import { dataAsOf, filterOptions, trend } from '@/lib/dashboard';
+import { FRESH_WARN_MS, dataAsOf, filterOptions, trend } from '@/lib/dashboard';
 
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
-const FRESH_WARN_MS = 90 * 60 * 1000; // hourly cron + slack (D-013)
 const FUNNEL = ['signup', 'view', 'purchase']; // the one saved funnel (PRD P0-5)
 const FUNNEL_WINDOW_MS = 7 * DAY;
 const day = (s: string | undefined) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T00:00:00Z`) : null);

@@ -3,6 +3,9 @@ import { db } from '@/core/db';
 const DAY = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
+/** Rollups older than this read "stale": the daily cron (vercel.json, `0 6 * * *`) plus 2 h slack (D-024). */
+export const FRESH_WARN_MS = 26 * 3_600_000;
+
 export type TrendQuery = { eventName: string; from: Date; to: Date; prop?: string; value?: string; asOf?: Date };
 export type TrendPoint = { day: string; count: number | null };
 
