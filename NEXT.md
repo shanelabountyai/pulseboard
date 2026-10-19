@@ -42,3 +42,9 @@ Delete org) moved to the right edge beside Account; the Billing prop now carries
 ## Demo sign-in
 
 `npm run seed:generate`, then `/demo` → `owner@demo.seed.test` (demo-flagged, TOTP-enrolled, created by the seed).
+
+## Foundation upgrade (2026-10-19)
+
+saas-foundation v1.2.1 → v1.3.0 (security: INV-22, INV-28; `scorekeeper` role, migration `20261014000000_role_scorekeeper`)
+is on branch `foundation-v1.3.0`, awaiting merge (due 2026-10-21). After merge: `npm run db:migrate`, then update
+pulseboard's row in the template's `CLONES.md` (the row still reads v1.2.0 there).
