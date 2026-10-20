@@ -1,5 +1,5 @@
 // public: authenticated by a hashed write key (orgForWriteKey), not a session
-import { ingest, MAX_BATCH, MAX_BODY_BYTES, orgForWriteKey } from '@/lib/ingest';
+import { ingest, MAX_BATCH, orgForWriteKey, readBodyCapped } from '@/lib/ingest';
 
 const fail = (status: number, error: string) => Response.json({ error }, { status });
 
@@ -9,8 +9,8 @@ export async function POST(req: Request) {
   const orgId = await orgForWriteKey(req.headers.get('authorization'));
   if (!orgId) return fail(401, 'invalid write key');
 
-  const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) return fail(413, 'body larger than 1MB');
+  const text = await readBodyCapped(req);
+  if (text === null) return fail(413, 'body larger than 1MB');
   let body: unknown;
   try {
     body = JSON.parse(text);

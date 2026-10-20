@@ -3,6 +3,7 @@ import { db } from '@/core/db';
 import { advanceClock, now } from '@/core/clock';
 import { newToken, hashToken } from '@/core/tokens';
 import { POST } from '@/app/ingest/route';
+import { MAX_BODY_BYTES, readBodyCapped } from '@/lib/ingest';
 
 let key: string;
 let orgId: string;
@@ -144,5 +145,46 @@ describe('POST /ingest', () => {
       expect(body.rejected.map((r: { index: number }) => r.index)).toEqual([0]);
       expect(await db.deadLetterEvent.count()).toBe(1);
     }
+  });
+
+  // The cap is bytes: `text.length` counted UTF-16 units, so 1.4MB of 2-byte characters passed as 0.7MB.
+  it('rejects a body over 1MB counted in bytes, not characters, with 413', async () => {
+    const big = 'é'.repeat(700_000); // 1.4MB as UTF-8, 700k UTF-16 units
+    const res = await post(`{"events":[${JSON.stringify(ev({ properties: { a: big } }))}]}`);
+    expect(res.status).toBe(413);
+    expect(await db.deadLetterEvent.count()).toBe(0);
+  });
+
+  it('refuses a declared Content-Length over the cap before reading the body', async () => {
+    let pulled = false;
+    const body = new ReadableStream({ pull: (c) => { pulled = true; c.enqueue(new TextEncoder().encode('{}')); c.close(); } }, { highWaterMark: 0 });
+    const req = new Request('http://x/ingest', {
+      method: 'POST', body, duplex: 'half', headers: { authorization: `Bearer ${key}`, 'content-length': String(MAX_BODY_BYTES + 1) },
+    } as RequestInit);
+    expect((await POST(req)).status).toBe(413);
+    expect(pulled).toBe(false);
+  });
+});
+
+describe('readBodyCapped', () => {
+  const streamed = (chunks: string[]) => {
+    const enc = new TextEncoder();
+    const body = new ReadableStream({ start: (c) => { for (const ch of chunks) c.enqueue(enc.encode(ch)); c.close(); } });
+    return new Request('http://x', { method: 'POST', body, duplex: 'half' } as RequestInit);
+  };
+
+  it('reassembles a multi-byte character split across chunks', async () => {
+    const bytes = new TextEncoder().encode('é'); // 2 bytes
+    const body = new ReadableStream({ start: (c) => { c.enqueue(bytes.slice(0, 1)); c.enqueue(bytes.slice(1)); c.close(); } });
+    expect(await readBodyCapped(new Request('http://x', { method: 'POST', body, duplex: 'half' } as RequestInit))).toBe('é');
+  });
+
+  it('accepts exactly the cap and cuts off one byte past it, with no Content-Length', async () => {
+    expect(await readBodyCapped(streamed(['ab', 'cd']), 4)).toBe('abcd');
+    expect(await readBodyCapped(streamed(['ab', 'cd', 'e']), 4)).toBeNull();
+  });
+
+  it('reads an empty body as an empty string', async () => {
+    expect(await readBodyCapped(new Request('http://x', { method: 'POST' }))).toBe('');
   });
 });

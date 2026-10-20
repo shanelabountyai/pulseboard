@@ -39,6 +39,37 @@ function deadLetterPayload(row: unknown): string {
   }
 }
 
+/**
+ * The request body as UTF-8 text, or null once it is larger than `max` bytes. A declared Content-Length over the cap
+ * is refused before reading; otherwise the stream is counted as it arrives, so an oversized or chunked body is cut
+ * off at the cap instead of being buffered whole. (`text.length` counted UTF-16 units, so 1MB of 2-byte characters
+ * passed as 0.5MB.)
+ */
+export async function readBodyCapped(req: Request, max = MAX_BODY_BYTES): Promise<string | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) return null;
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
 export type IngestResult = { accepted: number; duplicates: number; rejected: { index: number; reason: string }[] };
 
 /** `Authorization: Bearer <write key>` → the org it writes to, or null. Keys are stored only hashed. */
