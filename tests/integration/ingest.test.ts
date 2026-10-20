@@ -94,4 +94,55 @@ describe('POST /ingest', () => {
     expect(await db.event.count({ where: { orgId: other.id } })).toBe(0);
     expect(await db.event.count({ where: { orgId } })).toBe(1);
   });
+
+  // Postgres refuses U+0000 in text/jsonb and an unpaired surrogate in jsonb. Before the fix any one of these made
+  // the batch's single INSERT throw: a 500, and every good row in the batch was lost with it.
+  it.each([
+    ['user_id with U+0000', { user_id: 'a\u0000b' }],
+    ['event_name with U+0000', { event_name: 'a\u0000b' }],
+    ['event_id with U+0000', { event_id: 'a\u0000b' }],
+    ['user_id with an unpaired surrogate', { user_id: 'a\ud800b' }],
+    ['property value with U+0000', { properties: { k: 'a\u0000b' } }],
+    ['property key with U+0000', { properties: { ['k\u0000']: 1 } }],
+    ['property value with an unpaired high surrogate', { properties: { k: 'a\ud800b' } }],
+    ['property value with an unpaired low surrogate', { properties: { k: 'a\udc00b' } }],
+  ])('dead-letters a %s and still stores the good rows', async (_, over) => {
+    const res = await post({ events: [ev({ user_id: 'good1' }), ev(over), ev({ user_id: 'good2' })] });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accepted).toBe(2);
+    expect(body.rejected).toEqual([{ index: 1, reason: expect.stringMatching(/U\+0000 or an unpaired surrogate/) }]);
+    expect((await db.event.findMany({ orderBy: { userId: 'asc' } })).map((e) => e.userId)).toEqual(['good1', 'good2']);
+    expect(await db.deadLetterEvent.count()).toBe(1);
+  });
+
+  it('keeps valid surrogate pairs and an escaped backslash before "u0000" as sent', async () => {
+    const body = await (await post({ events: [ev({ user_id: 'emoji-\u{1F600}', properties: { k: '\u{1F600}', path: 'C:\\u0000' } })] })).json();
+    expect(body).toEqual({ accepted: 1, duplicates: 0, rejected: [] });
+    const row = await db.event.findFirstOrThrow();
+    expect(row.userId).toBe('emoji-\u{1F600}');
+    expect(row.properties).toEqual({ k: '\u{1F600}', path: 'C:\\u0000' });
+  });
+
+  it('stores a dead-letter payload holding U+0000 or an unpaired surrogate, with U+FFFD in their place', async () => {
+    const res = await post({ events: [{ event_name: '', junk: 'x\u0000y', ['k\ud800']: 'z\udc00' }, ev({ user_id: 'good' })] });
+    expect(res.status).toBe(200);
+    expect((await res.json()).accepted).toBe(1);
+    const [dead] = await db.deadLetterEvent.findMany();
+    expect(dead!.payload).toEqual({ event_name: '', junk: 'x\uFFFDy', ['k\uFFFD']: 'z\uFFFD' });
+  });
+
+  it('dead-letters a row nested too deeply to serialize and still stores the good rows', async () => {
+    const deep = '['.repeat(200_000) + ']'.repeat(200_000);
+    const good = JSON.stringify(ev({ user_id: 'good' }));
+    for (const row of [`{"event_name":"a","user_id":"u","timestamp":"${now().toISOString()}","properties":{"a":${deep}}}`, deep]) {
+      await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent"`;
+      const res = await post(`{"events":[${row},${good}]}`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.accepted).toBe(1);
+      expect(body.rejected.map((r: { index: number }) => r.index)).toEqual([0]);
+      expect(await db.deadLetterEvent.count()).toBe(1);
+    }
+  });
 });
