@@ -46,5 +46,13 @@ Delete org) moved to the right edge beside Account; the Billing prop now carries
 ## Foundation upgrade (2026-10-19)
 
 saas-foundation v1.2.1 → v1.3.0 (security: INV-22, INV-28; `scorekeeper` role, migration `20261014000000_role_scorekeeper`)
-is on branch `foundation-v1.3.0`, awaiting merge (due 2026-10-21). After merge: `npm run db:migrate`, then update
+is merged to main (PR #1, aba1b32). Still to do: `npm run db:migrate` on the laptop's dev database, then update
 pulseboard's row in the template's `CLONES.md` (the row still reads v1.2.0 there).
+`foundation:drift` needs the `v1.3.0` tag locally: `git fetch template --tags` first, or it fails with `bad revision`.
+
+## Overnight hardening (2026-10-20)
+
+Branch `overnight/2026-10-20-hardening` (draft PR): ingest no longer fails a batch on a row holding U+0000 or an unpaired
+surrogate (D-025), the body cap counts bytes, an impossible dashboard date param no longer 500s, and new tests for
+ingest boundaries, rollups, 4-5 step funnels, retention bounds, the cron tick and the dashboard page. The PR lists the
+open issues it found but did not fix.

@@ -83,4 +83,17 @@ describe('retention cohorts (hand-computed)', () => {
     // W1: r6 r7; both active in W2 → k1 = 2. W2 is empty and drops out.
     expect(rows.map((r) => [r.week, r.size, r.returned[0]])).toEqual([[iso(0), 5, 3], [iso(1), 2, 2], [iso(6), 1, 0]]);
   });
+
+  it('picks cohorts by week start in [from, to): a mid-week from skips that week, to is exclusive', async () => {
+    // State after the late event: cohorts W0 (5), W1 (r6 r7), W6 (r9). From Wednesday of W0 to Monday of W6.
+    const rows = await retention(orgId, { from: new Date(W(0, 2 * DAY)), to: new Date(W(6, 0)) });
+    expect(rows.map((r) => [r.week, r.size])).toEqual([[iso(1), 2]]);
+  });
+
+  it('treats the return event as data: SQL metacharacters match nothing', async () => {
+    const rows = await retention(orgId, { ...range, returnEvent: `view' OR '1'='1` });
+    expect(rows.map((r) => r.size)).toEqual([5, 2, 1]); // cohorts unchanged (first seen on any event)
+    for (const r of rows) expect(r.returned.every((n) => n === 0 || n === null)).toBe(true);
+  });
 });
+

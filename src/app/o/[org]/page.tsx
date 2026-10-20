@@ -8,7 +8,13 @@ const DAY = 86_400_000;
 const WEEK = 7 * DAY;
 const FUNNEL = ['signup', 'view', 'purchase']; // the one saved funnel (PRD P0-5)
 const FUNNEL_WINDOW_MS = 7 * DAY;
-const day = (s: string | undefined) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T00:00:00Z`) : null);
+// A real calendar day or null. The shape check alone let `2026-13-01` through as Invalid Date (toISOString then threw,
+// a 500) and rolled `2026-02-31` over to March 3; the round trip rejects both.
+const day = (s: string | undefined) => {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? d : null;
+};
 
 type SP = { [k: string]: string | string[] | undefined };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
