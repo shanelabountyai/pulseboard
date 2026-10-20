@@ -138,7 +138,9 @@ describe('rollups: property values, isolation, concurrency', () => {
       ev('e', 'u2', at(0), { v: `${'x'.repeat(200)}-different-tail` }), // same first 200 chars: one bucket
     ]);
     await runRollups();
-    expect(await props()).toEqual([
+    // ORDER BY value follows the database collation (C locally, en_US in CI), so compare in code-unit order
+    const byValue = (a: unknown[], b: unknown[]) => (String(a[3]) < String(b[3]) ? -1 : String(a[3]) > String(b[3]) ? 1 : 0);
+    expect((await props()).sort(byValue)).toEqual([
       [iso(0), 'e', 'v', '42', 1],
       [iso(0), 'e', 'v', 'true', 1],
       [iso(0), 'e', 'v', 'x'.repeat(200), 2],
