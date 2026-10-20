@@ -121,3 +121,95 @@ describe('rollups', () => {
     expect(await verifyRollups()).toEqual([{ orgId, day: iso(0), eventName: 'signup', raw: [2, 2], rollup: [2, 2], userDays: 1 }]);
   });
 });
+
+describe('rollups: property values, isolation, concurrency', () => {
+  const userDays = async (org = orgId) =>
+    (await db.rollupUserDay.findMany({ where: { orgId: org }, orderBy: [{ day: 'asc' }, { eventName: 'asc' }, { userId: 'asc' }] }))
+      .map((r) => [r.day.toISOString().slice(0, 10), r.eventName, r.userId]);
+
+  it('rolls up non-string property values as their JSON text, truncates at 200 chars, and skips JSON null', async () => {
+    await db.registeredProperty.create({ data: { orgId, prop: 'v' } });
+    await ingest(orgId, [
+      ev('e', 'u1', at(0), { v: 42 }),
+      ev('e', 'u1', at(0), { v: true }),
+      ev('e', 'u1', at(0), { v: { a: 1 } }),
+      ev('e', 'u1', at(0), { v: null }), // not rolled up (D-012)
+      ev('e', 'u1', at(0), { v: 'x'.repeat(250) }),
+      ev('e', 'u2', at(0), { v: `${'x'.repeat(200)}-different-tail` }), // same first 200 chars: one bucket
+    ]);
+    await runRollups();
+    expect(await props()).toEqual([
+      [iso(0), 'e', 'v', '42', 1],
+      [iso(0), 'e', 'v', 'true', 1],
+      [iso(0), 'e', 'v', 'x'.repeat(200), 2],
+      [iso(0), 'e', 'v', '{"a": 1}', 1],
+    ]);
+    expect(await daily()).toEqual([[iso(0), 'e', 6, 2]]);
+  });
+
+  it('applies an event-scoped registration only to that event', async () => {
+    await db.registeredProperty.create({ data: { orgId, eventName: 'signup', prop: 'plan' } });
+    await ingest(orgId, [ev('signup', 'u1', at(0), { plan: 'pro' }), ev('view', 'u1', at(0), { plan: 'pro' })]);
+    await runRollups();
+    expect(await props()).toEqual([[iso(0), 'signup', 'plan', 'pro', 1]]);
+  });
+
+  it('writes one RollupUserDay row per (day, event, user), however many events that user fired', async () => {
+    await ingest(orgId, [
+      ev('view', 'u1', at(0)), ev('view', 'u1', at(0, 13 * 3_600_000)), ev('view', 'u2', at(0)),
+      ev('signup', 'u1', at(0)), ev('view', 'u1', at(1)),
+    ]);
+    await runRollups();
+    expect(await userDays()).toEqual([
+      [iso(0), 'signup', 'u1'], [iso(0), 'view', 'u1'], [iso(0), 'view', 'u2'], [iso(1), 'view', 'u1'],
+    ]);
+  });
+
+  it('keeps every org\'s rollups, registrations and watermark to itself', async () => {
+    const other = (await db.org.create({ data: { slug: 'other', name: 'Other' } })).id;
+    await db.registeredProperty.create({ data: { orgId: other, prop: 'plan' } }); // registered in the other org only
+    await ingest(orgId, [ev('signup', 'u1', at(0), { plan: 'pro' })]);
+    await ingest(other, [ev('signup', 'x1', at(0), { plan: 'free' }), ev('signup', 'x2', at(0), { plan: 'free' })]);
+    const results = await runRollups();
+    expect(results.map((r) => [r.orgId, r.days]).sort()).toEqual([[orgId, 1], [other, 1]].sort());
+
+    expect(await daily()).toEqual([[iso(0), 'signup', 1, 1]]);
+    expect(await props()).toEqual([]); // orgId registered nothing
+    expect(await userDays()).toEqual([[iso(0), 'signup', 'u1']]);
+    expect(await userDays(other)).toEqual([[iso(0), 'signup', 'x1'], [iso(0), 'signup', 'x2']]);
+    expect((await db.rollupDailyProp.findMany({ where: { orgId: other } })).map((r) => [r.value, r.count])).toEqual([['free', 2]]);
+    expect(await verifyRollups()).toEqual([]);
+  });
+
+  it('a first run with no events creates the watermark at epoch and rebuilds nothing', async () => {
+    const r = await runRollupsForOrg(orgId);
+    expect(r).toEqual({ orgId, days: 0, watermark: new Date(0) });
+    expect((await db.rollupWatermark.findUniqueOrThrow({ where: { orgId } })).ranAt.getTime()).toBeGreaterThan(0);
+  });
+
+  it('two concurrent runs for one org serialize on the watermark lock and leave exact rollups', async () => {
+    await db.registeredProperty.create({ data: { orgId, prop: 'plan' } });
+    await ingest(orgId, Array.from({ length: 200 }, (_, i) => ev('view', `u${i % 37}`, at(i % 5, (i * 997) % DAY), { plan: i % 2 ? 'pro' : 'free' })));
+    const [a, b] = await Promise.all([runRollupsForOrg(orgId), runRollupsForOrg(orgId)]);
+    expect(a.watermark).toEqual(b.watermark);
+    expect(await verifyRollups()).toEqual([]);
+    const total = (await db.rollupDaily.findMany({ where: { orgId } })).reduce((n, r) => n + r.count, 0);
+    expect(total).toBe(200);
+    const propTotal = (await db.rollupDailyProp.findMany({ where: { orgId } })).reduce((n, r) => n + r.count, 0);
+    expect(propTotal).toBe(200);
+  });
+
+  it('an event moved out of a day by a later run leaves no stale row for that event behind', async () => {
+    // A day is rebuilt whole: if a day's only 'signup' row disappears from raw (here: an org's events deleted and
+    // re-sent under another name), the next run's DELETE removes the old rollup row rather than keeping it.
+    await ingest(orgId, [ev('signup', 'u1', at(0))]);
+    await runRollups();
+    await db.$executeRaw`DELETE FROM "Event" WHERE "orgId" = ${orgId}::uuid`;
+    advanceClock(3_600_000);
+    await ingest(orgId, [ev('view', 'u1', at(0))]);
+    await runRollups();
+    expect(await daily()).toEqual([[iso(0), 'view', 1, 1]]);
+    expect(await userDays()).toEqual([[iso(0), 'view', 'u1']]);
+  });
+});
+
