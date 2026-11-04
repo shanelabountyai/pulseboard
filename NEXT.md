@@ -50,3 +50,4 @@ is on branch `foundation-v1.4.0`, awaiting merge. v1.4.0 adds `filterListedOrgs`
 the template default (`return orgs`): it hides no orgs. No migration. Conflicts: only `CLONES.md` and `NEXT.md` (template-only
 docs), kept as pulseboard's. Gate: typecheck, lint, 234/234 tests, `foundation:drift` clean against v1.4.0, `npm run build`.
 After merge: update pulseboard's row in the template's `CLONES.md`. (v1.3.0 merged 2026-10-19, PR #1.)
+2026-11-04: v1.4.1 (`security:` next 16.4.5, zod 4.6.7, prisma 7.10.1) added to the same branch; `npm audit --omit=dev` 0, gate green, 234/234 tests.
