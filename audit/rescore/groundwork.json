@@ -1,0 +1,72 @@
+{
+ "K1": {
+  "s": "✔",
+  "text": "Sessions are DB rows with SHA-256 hashed session/link tokens, links spent by POST, dispatcher role read live per request, user delete cascades sessions, and portal access is revoked on contact change (SEC-01 done).",
+  "evidence": "src/session.ts:33-45,54-64,72-78; src/portal/session.ts:56-66; app/dispatch/properties/actions.ts:61; app/login/[token]/page.tsx; app/dispatch/users/actions.ts:83"
+ },
+ "K2": {
+  "s": "✗",
+  "text": "No second factor for dispatchers (privileged role); magic link alone signs in, and no backlog SEC item exists.",
+  "evidence": "src/session.ts:61-70"
+ },
+ "K3": {
+  "s": "✔",
+  "text": "Swept every page, layout, route handler and 'use server' export: all dispatch pages/actions call requireDispatcher, crew pages requireCrew, crew actions currentRole, portal pages/actions currentPropertyId, both photo routes check a session, webhook authenticates by signature; only login/link-request/sign-in actions are public by design.",
+  "evidence": "app/dispatch/*/actions.ts; app/dispatch/layout.tsx; app/crew/[crewId]/actions.ts:16,61; app/portal/actions.ts:44-75; app/photos/[name]/route.ts:14; app/portal/photos/[name]/route.ts:12; app/stripe/webhook/route.ts:10"
+ },
+ "K4": {
+  "s": "✔",
+  "text": "Swept crew and portal by-id paths: crew actions count visit by {id,crewId} from session, portal skip/reschedule/pay/photo check propertyId, portal pages resolve visits only from the caller's schedule; dispatcher is single-tenant staff so sees all (dispatch by-id pages not individually re-read).",
+  "evidence": "app/crew/[crewId]/actions.ts:20-24; src/visits/status.ts:87-91; src/billing/invoice.ts:118; src/portal/view.ts:64-66; app/portal/cancel/[visitId]/page.tsx:21"
+ },
+ "K5": {
+  "s": "✗",
+  "text": "Only a per-account 60s cooldown on link requests, no per-IP or shared-store limit on the unauthenticated forms (SEC-04 still open).",
+  "evidence": "src/session.ts:46-48; src/portal/session.ts:44"
+ },
+ "K6": {
+  "s": "N/A",
+  "text": "No public token links: emailed portal/login tokens are single-use sign-in links exchanged for a session by POST, not standing capability URLs.",
+  "evidence": "app/portal/[token]/page.tsx"
+ },
+ "K7": {
+  "s": "✗",
+  "text": "Global headers now set frame-ancestors, X-Frame-Options, Referrer-Policy and nosniff (SEC-03 done), but no Strict-Transport-Security header in code.",
+  "evidence": "next.config.ts:9-19"
+ },
+ "K8": {
+  "s": "✔",
+  "text": "Webhook HMAC uses timingSafeEqual and fails closed on an empty secret, no NEXT_PUBLIC vars, .env gitignored per prior audit, .env.example holds names only, APP_URL never from Host header.",
+  "evidence": "src/billing/stripe.ts:72-81; app/stripe/webhook/route.ts:12; .env.example"
+ },
+ "K9": {
+  "s": "✔",
+  "text": "Raw-body HMAC with 5-minute timestamp window; event claim and apply run in one transaction so a failure rolls back and Stripe retries (prior audit, verify-not-rerun on invoice.ts).",
+  "evidence": "src/billing/stripe.ts:64-82; src/billing/invoice.ts:184-219; app/stripe/webhook/route.ts:9-16"
+ },
+ "K10": {
+  "s": "✔",
+  "text": "Unconfigured channel now throws in production and the console provider is dev-only, so sign-in links are not logged (SEC-02 done).",
+  "evidence": "src/notifications/provider.ts:46-52"
+ },
+ "K11": {
+  "s": "✗",
+  "text": "No schema-validated env at boot: db.ts only checks DATABASE_URL; other vars read ad hoc (GROUNDWORK_ROAD_FACTOR is read but absent from .env.example).",
+  "evidence": "src/db.ts:4-10; .env.example"
+ },
+ "K12": {
+  "s": "✔",
+  "text": "Cloud-DB refusal in src/db.ts and prisma.config.ts, local .env.test, and Playwright webServer runs build plus next start (E2E_DEV escape hatch).",
+  "evidence": "src/db.ts:8-10; prisma.config.ts:10-19; playwright.config.ts:26-31"
+ },
+ "K13": {
+  "s": "✗",
+  "text": "No append-only audit log or DB triggers for privileged changes; only createdBy/decidedBy columns on invoices and reschedules.",
+  "evidence": "prisma/schema.prisma:202; prisma/migrations/20260922120000_job_origin/migration.sql:72-86"
+ },
+ "K14": {
+  "s": "✔",
+  "text": "ignoreCommand present in the canonical form, port 3900 in config, no cron routes.",
+  "evidence": "vercel.json:4; package.json"
+ }
+}

@@ -1,0 +1,67 @@
+<title>Foundation Scorecard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f3f5f7;--surf:#fff;--ink:#16212b;--mute:#5d6b78;--line:#d7dde3;--ok:#0f766e;--okbg:#d9f0ec;--bad:#b4342d;--badbg:#f8e0dd;--na:#8a97a3;--q:#a16207;--qbg:#f6ecd0;--sel:#16212b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f161d;--surf:#17212b;--ink:#e6ecf1;--mute:#93a1ad;--line:#2a3743;--ok:#5fd1c2;--okbg:#12342f;--bad:#f28b82;--badbg:#3c1d1b;--na:#6d7b87;--q:#e6c15a;--qbg:#3a3013;--sel:#e6ecf1;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f161d;--surf:#17212b;--ink:#e6ecf1;--mute:#93a1ad;--line:#2a3743;--ok:#5fd1c2;--okbg:#12342f;--bad:#f28b82;--badbg:#3c1d1b;--na:#6d7b87;--q:#e6c15a;--qbg:#3a3013;--sel:#e6ecf1;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 "IBM Plex Sans",system-ui,sans-serif;padding-inline:16px;padding-block:28px}
+main{max-width:1100px;margin:auto}
+h1{font-size:26px;margin:0 0 6px;text-wrap:balance}
+.sub{color:var(--mute);max-width:65ch;margin:0 0 18px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--mute);margin-bottom:14px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.wrap{overflow-x:auto;background:var(--surf);border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;min-width:820px}
+th,td{padding:0;text-align:center;border-bottom:1px solid var(--line)}
+th{font-weight:500;font-size:11px;color:var(--mute);padding:8px 2px;letter-spacing:.03em;text-transform:uppercase}
+th small{display:block;font-size:10px;text-transform:none;letter-spacing:0}
+th.n,td.n{text-align:left;padding:8px 12px;position:sticky;left:0;background:var(--surf);min-width:170px;font-weight:500}
+td.n .st{margin-top:2px;font-size:11px}td.n .t{font:12px "IBM Plex Mono",monospace;color:var(--mute);font-weight:400}
+tr.f td{background:var(--okbg)} tr.f td.n{background:var(--okbg)}
+td button{all:unset;cursor:pointer;display:block;width:100%;height:100%;padding:9px 0;font:600 15px "IBM Plex Mono",monospace;box-sizing:border-box}
+td button:focus-visible{outline:2px solid var(--sel);outline-offset:-2px}
+td button[aria-pressed=true]{background:var(--sel);color:var(--bg)!important}
+.s-ok{color:var(--ok)} .s-bad{color:var(--bad);background:var(--badbg)} .s-na{color:var(--na);font-weight:400} .s-q{color:var(--q);background:var(--qbg)}
+.detail{margin-top:16px;background:var(--surf);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-height:96px}
+.detail h2{font-size:15px;margin:0 0 6px}
+.detail p{margin:4px 0;max-width:75ch}
+.tag{display:inline-block;font:12px "IBM Plex Mono",monospace;padding:1px 7px;border:1px solid var(--line);border-radius:3px;margin-right:6px;color:var(--mute)}
+.ev{font:12px "IBM Plex Mono",monospace;color:var(--mute);overflow-wrap:anywhere}
+.check{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:12px}.rq{margin-top:4px;font:500 11px "IBM Plex Sans",sans-serif;color:var(--bg);background:var(--sel);border:0;border-radius:4px;padding:3px 8px;cursor:pointer}.rq:disabled{opacity:.5;cursor:default}.rq:focus-visible{outline:2px solid var(--ok);outline-offset:2px}.scope{border-left:3px solid var(--q);padding:6px 12px;margin:0 0 18px;max-width:75ch;background:var(--surf)}
+</style>
+<main>
+<h1>Foundation Scorecard</h1>
+<p class="sub">Every code project against the 14 key pieces of the saas foundation (K1–K14). Select a cell for the reason, the evidence and the backlog item that fixes it.</p>
+<div class="scope"><b>Scope.</b> The foundation row was verified today (122 tests pass, __VER__). Every other row was re-scored against current code on 2026-09-25 by one Sonnet agent per project (read-only, no builds or tests run); each cell says how it was checked. On __ASOF__ an Opus agent swept K4 exhaustively on the four rows that had only been spot-checked (rental and clinic had confirmed HIGH findings; both were fixed the same day, CI green), and rental's re-check request was processed. The dead design bridge keeps its 2026-09-23 baseline.</div>
+<div class="legend"><span><b class="s-ok mono">✔</b> compliant</span><span><b class="s-bad mono">✗</b> not compliant</span><span><b class="s-na mono">–</b> N/A</span><span><b class="s-q mono">?</b> not verified</span></div>
+<p class="ev" id="rs">Each project row has a re-check button. A request is queued here and run from the Claude Code session in the foundation repo; it re-scores that project only.</p>
+<div class="wrap"><table id="m"></table></div>
+<div class="detail" id="d" aria-live="polite"></div>
+</main>
+<script>
+const D=__DATA__;
+const G={"✔":["✔","s-ok"],"✗":["✗","s-bad"],"N/A":["–","s-na"],"?":["?","s-q"]};
+const m=document.getElementById('m'),d=document.getElementById('d');let sel=null;
+let h='<thead><tr><th class="n">Project</th>';
+for(const k in D.keys)h+=`<th>${k}<small>${D.keys[k]}</small></th>`;
+h+='<th>✔</th></tr></thead><tbody>';
+D.rows.forEach((r,i)=>{const n=Object.values(r.cells).filter(c=>c.s==="✔").length;
+h+=`<tr class="${i?'':'f'}"><td class="n">${r.name}<div class="t">${i?r.id:'v'+D.foundationVersion}</div>${i?`<button class="rq" type="button" data-id="${r.id}" hidden>Re-check</button><div class="ev st" data-st="${r.id}"></div>`:''}</td>`;
+for(const k in D.keys){const c=r.cells[k],g=G[c.s];h+=`<td><button class="${g[1]}" data-r="${i}" data-k="${k}" aria-pressed="false" aria-label="${r.name} ${k}: ${c.s}">${g[0]}</button></td>`}
+h+=`<td class="mono">${n}/14</td></tr>`});
+m.innerHTML=h+'</tbody>';
+function show(b){if(sel)sel.setAttribute('aria-pressed','false');sel=b;b.setAttribute('aria-pressed','true');
+const r=D.rows[b.dataset.r],c=r.cells[b.dataset.k],e=x=>x.replace(/[&<>]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
+d.innerHTML=`<h2>${e(r.name)} · ${b.dataset.k} ${D.keys[b.dataset.k]} <span class="tag">${c.s}</span></h2><p>${e(c.text)}</p>`+
+(c.evidence?`<p class="ev">${e(c.evidence)}</p>`:'')+`<p><span class="tag">${c.basis}</span>${c.secs.map(s=>`<span class="tag">${s}</span>`).join('')}</p>`}
+m.addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b)});
+show(m.querySelector('button[data-r="4"][data-k="K6"]'));
+(async()=>{const db=await claude.use("db");if(!db)return;
+const f=t=>new Date(t).toLocaleDateString();
+document.querySelectorAll('.rq').forEach(b=>{b.hidden=false;
+b.onclick=async()=>{b.disabled=true;try{await db.doc("checks/"+b.dataset.id).update({requestedAt:Date.now()})}catch(e){try{await db.doc("checks/"+b.dataset.id).set({requestedAt:Date.now()})}catch(e2){b.disabled=false;document.querySelector('[data-st="'+b.dataset.id+'"]').textContent='Could not queue ('+(e2.code||'error')+')'}}}});
+db.collection("checks").onSnapshot(qs=>{qs.docs.forEach(d=>{const v=d.data()||{},b=document.querySelector('.rq[data-id="'+d.id+'"]'),st=document.querySelector('[data-st="'+d.id+'"]');if(!b)return;
+const pending=v.requestedAt&&(!v.doneAt||v.doneAt<v.requestedAt);b.disabled=!!pending;
+st.textContent=pending?'Queued '+f(v.requestedAt):(v.doneAt?'Checked '+f(v.doneAt)+': '+(v.summary||''):'')})},()=>{});
+})();
+</script>
