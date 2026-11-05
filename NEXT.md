@@ -43,8 +43,11 @@ Delete org) moved to the right edge beside Account; the Billing prop now carries
 
 `npm run seed:generate`, then `/demo` → `owner@demo.seed.test` (demo-flagged, TOTP-enrolled, created by the seed).
 
-## Foundation upgrade (2026-10-19)
+## Foundation upgrade (2026-11-04)
 
-saas-foundation v1.2.1 → v1.3.0 (security: INV-22, INV-28; `scorekeeper` role, migration `20261014000000_role_scorekeeper`)
-is on branch `foundation-v1.3.0`, awaiting merge (due 2026-10-21). After merge: `npm run db:migrate`, then update
-pulseboard's row in the template's `CLONES.md` (the row still reads v1.2.0 there).
+saas-foundation v1.3.0 → v1.4.0 (includes v1.3.1, `security:` next/eslint-config-next 16.3.6 → 16.3.8, due 2026-10-27, late)
+is on branch `foundation-v1.4.0`, awaiting merge. v1.4.0 adds `filterListedOrgs` to `src/app/org-hooks.ts`; pulseboard keeps
+the template default (`return orgs`): it hides no orgs. No migration. Conflicts: only `CLONES.md` and `NEXT.md` (template-only
+docs), kept as pulseboard's. Gate: typecheck, lint, 234/234 tests, `foundation:drift` clean against v1.4.0, `npm run build`.
+After merge: update pulseboard's row in the template's `CLONES.md`. (v1.3.0 merged 2026-10-19, PR #1.)
+2026-11-04: v1.4.1 (`security:` next 16.4.5, zod 4.6.7, prisma 7.10.1) added to the same branch; `npm audit --omit=dev` 0, gate green, 234/234 tests.
