@@ -7,7 +7,10 @@ import { usePathname } from 'next/navigation';
 // layout (shared across every /o/[org]/* page) doesn't have without it.
 // canBilling is optional: its prop line in layout.tsx carries the `// billing` marker, so removing the billing module drops it.
 // Org admin links sit at the right edge with Account, away from the product views.
-export function OrgNav({ base, orgName, canBilling, canDelete }: { base: string; orgName: string; canBilling?: boolean; canDelete: boolean }) {
+// canSso and canApiKeys follow the same rule with `// sso` and `// apikeys`.
+export function OrgNav({ base, orgName, canAudit, canBilling, canSso, canApiKeys, canDelete }: {
+  base: string; orgName: string; canAudit: boolean; canBilling?: boolean; canSso?: boolean; canApiKeys?: boolean; canDelete: boolean;
+}) {
   const pathname = usePathname();
   const current = (href: string) => (pathname === href ? 'page' : undefined);
   return (
@@ -17,8 +20,12 @@ export function OrgNav({ base, orgName, canBilling, canDelete }: { base: string;
         <li><Link href={base} aria-current={current(base)}>Dashboard</Link></li>
         <li><Link href={`${base}/projects`} aria-current={current(`${base}/projects`)}>Projects</Link></li>
         <li className="pb-nav-end"><Link href={`${base}/settings/members`} aria-current={current(`${base}/settings/members`)}>Members</Link></li>
+        {canAudit && <li><Link href={`${base}/settings/audit`} aria-current={current(`${base}/settings/audit`)}>Audit log</Link></li>}
+        {canAudit && <li><Link href={`${base}/settings/security`} aria-current={current(`${base}/settings/security`)}>Security</Link></li>}
         {canBilling && <li><Link href={`${base}/settings/billing`} aria-current={current(`${base}/settings/billing`)}>Billing</Link></li>}
-        {canDelete && <li><Link href={`${base}/settings/danger`} aria-current={current(`${base}/settings/danger`)}>Delete org</Link></li>}
+        {canSso && <li><Link href={`${base}/settings/sso`} aria-current={current(`${base}/settings/sso`)}>SSO</Link></li>}
+        {canApiKeys && <li><Link href={`${base}/settings/apikeys`} aria-current={current(`${base}/settings/apikeys`)}>API keys</Link></li>}
+        {canDelete && <li><Link href={`${base}/settings/danger`} aria-current={current(`${base}/settings/danger`)}>Export or delete</Link></li>}
         <li><Link href="/onboarding">Your orgs</Link></li>
         <li><Link href="/account/security">Account</Link></li>
       </ul>

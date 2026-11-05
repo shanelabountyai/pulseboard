@@ -21,7 +21,10 @@ export default async function OrgLayout({ children, params }: { children: React.
         <OrgNav
           base={base}
           orgName={org.name}
+          canAudit={can(ctx.role, 'audit.read')}
           canBilling={can(ctx.role, 'billing.manage')} // billing
+          canSso={ctx.role === 'owner'} // sso
+          canApiKeys={can(ctx.role, 'apikeys.manage')} // apikeys
           canDelete={can(ctx.role, 'org.delete')}
         />
       </header>
