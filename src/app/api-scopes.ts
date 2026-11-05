@@ -4,6 +4,8 @@
 export const API_SCOPES = {
   read: { perMinute: 120, label: 'Read' },
   write: { perMinute: 20, label: 'Write' },
+  // POST /ingest (D-025). load-run's target is 1000 events/s in batches of 50 = 1,200 requests a minute per key; 3,000 is 2.5x that.
+  ingest: { perMinute: 3000, label: 'Ingest events' },
 } as const satisfies Record<string, { perMinute: number; label: string }>;
 
 export type ApiScope = keyof typeof API_SCOPES;

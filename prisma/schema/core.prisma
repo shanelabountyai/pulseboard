@@ -105,7 +105,6 @@ model Org {
   apiKeys        ApiKey[] // apikeys
   webhookEndpoints WebhookEndpoint[] // apikeys
   webhookDeliveries WebhookDelivery[] // apikeys
-  writeKeys      WriteKey[] // app
   pbEvents       Event[] // app
   deadLetters    DeadLetterEvent[] // app
   rollupDaily    RollupDaily[] // app

@@ -63,7 +63,7 @@ commit the migration; INV-30 fails until you do. The pooler accepts an SQL-creat
 | `npm run foundation:drift` | in a clone: fails if a template-owned file was edited |
 | `npm run foundation:status` | in a clone: current vs latest release, and any `security:` changelog entries between |
 | `npm run foundation:check-modules` | builds a scratch copy with both modules deleted (CI runs it) |
-| `npm run key:create -- <orgSlug>` | mints a `/ingest` write key and prints it once |
+| `npm run key:create -- <orgSlug>` | issues an `api_` key with the `ingest` scope for `/ingest` and prints it once (Settings → API keys does the same) |
 | `npm run rollups:run` | rebuilds the UTC days dirtied since each org's watermark (also runs on the `/api/cron` tick) |
 | `npm run rollups:verify` | rollup count/uniques vs. raw events per (org, day, event); exits 1 on drift |
 | `npm run bench:rollups [-- N]` | ingests N events (default 100k) into a throwaway org, times ingest + one rollup run, verifies, deletes it |
