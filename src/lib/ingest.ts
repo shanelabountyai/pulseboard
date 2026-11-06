@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { now } from '@/core/clock';
 import { db } from '@/core/db';
-import { hashToken } from '@/core/tokens';
 
 export const MAX_BATCH = 500;
 export const MAX_BODY_BYTES = 1 << 20;
@@ -18,14 +17,6 @@ const eventSchema = z.object({
 });
 
 export type IngestResult = { accepted: number; duplicates: number; rejected: { index: number; reason: string }[] };
-
-/** `Authorization: Bearer <write key>` → the org it writes to, or null. Keys are stored only hashed. */
-export async function orgForWriteKey(header: string | null): Promise<string | null> {
-  const key = /^Bearer (\S+)$/.exec(header ?? '')?.[1];
-  if (!key) return null;
-  const row = await db.writeKey.findFirst({ where: { keyHash: hashToken(key), revokedAt: null }, select: { orgId: true } });
-  return row?.orgId ?? null;
-}
 
 /**
  * Validates each row on its own: bad rows go to the dead-letter table with a reason, good rows land in one

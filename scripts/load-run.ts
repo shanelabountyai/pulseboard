@@ -1,11 +1,13 @@
 import { db } from '@/core/db'; // importing it is what refuses a cloud database (INV-18)
 import { hashToken, newToken } from '@/core/tokens';
+import { randomUUID } from 'node:crypto';
+import { KEY_PREFIX } from '@/modules/apikeys/keys';
 
 // `npm run load:run -- [rate] [batch] [seconds]` (defaults 1000 ev/s, 50 events/request, 60s) against a running
 // server at LOAD_URL (default http://localhost:4500; a production build: `npm run build && npm start`).
 // Open loop: requests fire on schedule whether or not earlier ones returned, and latency counts from the scheduled
 // send time, so a server that falls behind shows as latency and a missed rate, never as a quietly slower client.
-// Uses a throwaway org + write key, checks the stored row count against `accepted`, replays one batch to check
+// Uses a throwaway org + ingest API key, checks the stored row count against `accepted`, replays one batch to check
 // dedupe over HTTP, then deletes the org (VACUUM "Event" between runs). BENCH_NO_INDEXES=1 drops the three Event
 // query indexes for the run and rebuilds them after, to price their write cost (D-011).
 const [rate, batch, seconds] = [process.argv[2] ?? 1000, process.argv[3] ?? 50, process.argv[4] ?? 60].map(Number) as [number, number, number];
@@ -17,8 +19,9 @@ const rand = (k: number) => Math.floor(Math.random() * k);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const org = await db.org.create({ data: { slug: `load-${Date.now()}`, name: 'load' } });
-const key = `pk_${newToken()}`;
-await db.writeKey.create({ data: { orgId: org.id, keyHash: hashToken(key) } });
+const key = KEY_PREFIX + newToken();
+// createdById has no FK; the throwaway org has no members, so a random id stands in for its creator.
+await db.apiKey.create({ data: { orgId: org.id, label: 'load-run', scopes: ['ingest'], prefix: key.slice(0, KEY_PREFIX.length + 6), keyHash: hashToken(key), createdById: randomUUID() } });
 const post = (body: string) => fetch(url, { method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body });
 const body = (i: number) => JSON.stringify({ events: Array.from({ length: batch }, (_, j) => ({
   event_id: `${i}-${j}`, event_name: names[rand(names.length)], user_id: `u${rand(20_000)}`,

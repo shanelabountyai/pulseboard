@@ -31,6 +31,26 @@ Working on the template itself: `npm run dev:template` serves on :4100.
 set `PGUSER`/`PGPASSWORD` or `LOCAL_PG_URL_BASE` for a different Postgres. Real keys (Resend, Stripe, Twilio) are optional
 and go in `.env.local`; without them email is captured in the database, billing uses a mock, and SMS is off.
 
+### Row-level security on Neon (optional, `RLS_MODE=enforce`)
+
+`db:setup` gives you two roles locally: the owner (`DATABASE_URL` while RLS is off, `DATABASE_URL_SYSTEM`, `DIRECT_URL`) and
+`<name>_app_rw` with `NOBYPASSRLS` (`DATABASE_URL_APP_RW`). To enforce locally, set `DATABASE_URL` to the app_rw URL and
+`RLS_MODE=enforce` together: app_rw with RLS off sees no org rows, because off mode sets no org. On Neon, the role the console creates is a `neon_superuser` with `BYPASSRLS`, so the app role is made
+in SQL, as the owner, on the branch:
+
+```sql
+CREATE ROLE app_rw LOGIN PASSWORD '<generate one>' NOBYPASSRLS NOSUPERUSER;
+GRANT USAGE ON SCHEMA public TO app_rw;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_rw;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_rw;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_rw;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_rw;
+```
+
+Then in Vercel: `DATABASE_URL` = app_rw through the pooler (`-pooler` host), `DATABASE_URL_SYSTEM` = the owner through the pooler,
+`DIRECT_URL` = the owner without the pooler, `RLS_MODE=enforce`. Run `npm run rls:policies` once for your own org-owned models and
+commit the migration; INV-30 fails until you do. The pooler accepts an SQL-created role (spike S4a ran through it).
+
 ## Commands
 
 | Command | What it does |
@@ -43,7 +63,7 @@ and go in `.env.local`; without them email is captured in the database, billing 
 | `npm run foundation:drift` | in a clone: fails if a template-owned file was edited |
 | `npm run foundation:status` | in a clone: current vs latest release, and any `security:` changelog entries between |
 | `npm run foundation:check-modules` | builds a scratch copy with both modules deleted (CI runs it) |
-| `npm run key:create -- <orgSlug>` | mints a `/ingest` write key and prints it once |
+| `npm run key:create -- <orgSlug>` | issues an `api_` key with the `ingest` scope for `/ingest` and prints it once (Settings → API keys does the same) |
 | `npm run rollups:run` | rebuilds the UTC days dirtied since each org's watermark (also runs on the `/api/cron` tick) |
 | `npm run rollups:verify` | rollup count/uniques vs. raw events per (org, day, event); exits 1 on drift |
 | `npm run bench:rollups [-- N]` | ingests N events (default 100k) into a throwaway org, times ingest + one rollup run, verifies, deletes it |

@@ -97,7 +97,7 @@ instead: `npm run build && npm start`, then `npm run load:run` in the second ter
 | Demo sign-in | `/demo`, click a name | Only exists when `DEMO_MODE=1` (`.env.local`) |
 | `owner@demo.seed.test` | created by `seed:generate` | Owner of the seeded `demo` org — the one to use |
 | `owner@acme.demo.test`, etc. | created by `npm run seed:demo` | Template's own demo accounts (Acme Studio / Globex Labs) — no event data, not needed for this demo |
-| `/ingest` write key | `npm run key:create -- <orgSlug>` | Printed once, stored only as a hash. Don't mint one against `demo` for a live ingest demo — it'll add real rows to the shaped dataset. Use a scratch slug if you want to show `curl`-level ingestion live. |
+| `/ingest` API key (`api_…`, scope `ingest`) | `npm run key:create -- <orgSlug>`, or Settings → API keys | Printed once, stored only as a hash. Don't mint one against `demo` for a live ingest demo — it'll add real rows to the shaped dataset. Use a scratch slug if you want to show `curl`-level ingestion live. |
 
 ## Troubleshooting
 

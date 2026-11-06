@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/core/db';
 import { advanceClock, now } from '@/core/clock';
 import { newToken, hashToken } from '@/core/tokens';
+import { KEY_PREFIX } from '@/modules/apikeys/keys';
 import { POST } from '@/app/ingest/route';
 
 let key: string;
@@ -9,10 +10,10 @@ let orgId: string;
 
 beforeEach(async () => {
   advanceClock(0);
-  await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "WriteKey", "Org" CASCADE`;
+  await db.$executeRaw`TRUNCATE "Event", "DeadLetterEvent", "ApiKey", "Org" CASCADE`;
   orgId = (await db.org.create({ data: { slug: 'test-org', name: 'Test Org' } })).id;
-  key = newToken();
-  await db.writeKey.create({ data: { orgId, keyHash: hashToken(key) } });
+  key = KEY_PREFIX + newToken();
+  await db.apiKey.create({ data: { orgId, label: 'test', scopes: ['ingest'], prefix: key.slice(0, 10), keyHash: hashToken(key), createdById: crypto.randomUUID() } });
 });
 afterAll(() => db.$disconnect());
 
@@ -25,11 +26,20 @@ const post = (body: unknown, auth = `Bearer ${key}`) =>
   }));
 
 describe('POST /ingest', () => {
-  it('rejects a missing, wrong or revoked write key with 401', async () => {
-    expect((await post({ events: [ev()] }, '')).status).toBe(401);
+  it('rejects a missing, wrong or revoked key with a problem+json 401', async () => {
+    const res = await post({ events: [ev()] }, '');
+    expect(res.status).toBe(401);
+    expect(res.headers.get('content-type')).toContain('application/problem+json');
     expect((await post({ events: [ev()] }, 'Bearer nope')).status).toBe(401);
-    await db.writeKey.updateMany({ data: { revokedAt: now() } });
+    expect((await post({ events: [ev()] }, `Bearer pk_${newToken()}`)).status).toBe(401); // the retired D-003 format
+    await db.apiKey.updateMany({ data: { revokedAt: now() } });
     expect((await post({ events: [ev()] })).status).toBe(401);
+    expect(await db.event.count()).toBe(0);
+  });
+
+  it('refuses a key without the ingest scope with 403', async () => {
+    await db.apiKey.updateMany({ data: { scopes: ['read', 'write'] } });
+    expect((await post({ events: [ev()] })).status).toBe(403);
     expect(await db.event.count()).toBe(0);
   });
 
