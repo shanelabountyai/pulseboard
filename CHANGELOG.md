@@ -2,7 +2,7 @@
 
 Entries prefixed `security:` are mandatory for anything touching an invariant. Clones must take a `security:` release within 7 days.
 
-## Unreleased (1.6.0)
+## 1.6.0 (2026-11-06)
 
 **M9: row-level security, opt-in (addendum §2).** `withOrg(ctx, fn)` and `asSystem(fn)` in `src/core/db/rls.ts`; a second
 client on `DATABASE_URL_SYSTEM` (owner); `RLS_MODE` (unset | `enforce`). `npm run rls:policies` generates the policy migration from
@@ -65,6 +65,36 @@ INV-12 lives with INV-41. Migrations `20261108000000_org_events` (core), `202611
 `http://localhost`. A clone that merges this and calls no `emit` behaves as before. Delivery timing: an API write sends its
 webhooks right after the response; everything else (retries, events from page actions) waits for `/api/cron`, which the
 template schedules **daily** (see addendum §7 "As built in M13", item 3).
+
+**CI enforce leg is opt-in for clones** (owner, 2026-11-05; addendum §7 item 14). The template always runs `ci (off)` and
+`ci (enforce)`; a clone runs `enforce` only once the repo variable `RLS_ENFORCE=1` is set
+(`gh variable set RLS_ENFORCE --body 1 --repo <clone repo>`). INV-29 seeds clone tables through a fixture hook.
+
+**Real-provider hand checks (owner, 2026-11-06; addendum §3, M10 gate).** Okta (Integrator Free org): a new user on a verified
+domain JIT-joins Globex as member; promoted to admin with no TOTP, the Okta `amr` carries `mfa` and the session gets `mfaOrgId`
+(no TOTP prompt). Google Workspace: a `labintelligence.co` user lands in Acme. Not done by hand, covered by INV-35 to 38 through
+the mock: an unverified email (every Okta refusal on the night was the bug below, never a real `false`), a personal Gmail on the
+Google connection (Google honours the login hint and skips the account picker), and an Okta sign-in without `mfa` in `amr`.
+**What Okta's `email_verified` is worth:** Okta reported `true` for an admin-created `okta-tester@example.com`, an address no one
+can receive mail at. With Okta, `email_verified` means "the org's Okta admin vouches for it", not proof of inbox control: whoever
+administers the org's Okta can create a user with any email on an allowed domain and JIT-join. That is the expected trust model for
+an org's own IdP; the DNS-verified domain is the real control. **Found by the Okta check and fixed:** Okta's ID
+token carries `email` but never `email_verified`, so every Okta user was refused. The callback now reads both from userinfo
+when the ID token lacks either, bound to the same `sub`; the mock gains an Okta mode and INV-35 a case (mutation-checked red).
+
+Upgrade (every feature is opt-in; a clone that merges and sets nothing behaves as on 1.5.0 at runtime):
+
+1. Merge the tag, `npm ci`, `npx prisma migrate deploy`. Ten migrations, all additive. If the clone has its own `orgId` tables,
+   run `npm run rls:policies` and commit the migration it writes, or INV-29 fails on them.
+2. Clone-owned files arrive with safe defaults; fill them in when the feature is used: `src/app/export-hooks.ts` (list your
+   org-scoped tables, or INV-34 fails on them), `src/app/api-scopes.ts`, `src/app/event-types.ts`, `src/app/modules.ts`,
+   `src/app/cron-jobs.ts`.
+3. **The one compile break:** `removeMember` and `deleteAccount` take `onMembershipEnded` (from `src/app/org-hooks.ts`) as a
+   required argument. Any clone call site outside `src/core` must pass it.
+4. `.env.example` adds `DATABASE_URL_SYSTEM`, `RLS_MODE`, `AI_ENABLED`, `SSO_ENABLED`, `WEBHOOK_ALLOW_PRIVATE` and the
+   `SSO_TEST_*` set. All may stay unset. Turning on enforce needs an `app_rw` role without `BYPASSRLS` (`npm run db:setup` locally;
+   the README has the Neon SQL), `RLS_MODE=enforce`, both URLs, and the repo variable above.
+5. Remove `sso` or `apikeys` you don't use, the same way as billing; `npm run foundation:check-modules` confirms it.
 
 ## 1.5.0 (2026-11-04)
 
